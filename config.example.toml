@@ -6,7 +6,8 @@
 port = 8765                  # 1024〜65535
 
 [audio]
-device = ""                  # 空文字なら OS の既定のマイク。それ以外はデバイス名
+device = ""                  # 空文字なら OS の既定のマイク。それ以外はデバイス名（の一部）
+                             # デバイス名は `stream-buddy --list-devices` で調べられる
 speech_threshold_db = -40.0  # -80.0〜0.0。これより大きい音量を「発話中」とみなす
 
 [silence]

@@ -5,7 +5,9 @@ description = "1人配信の相棒「メンダコ」を OBS のブラウザソ�
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.162.0",
+    "numpy>=2.5.4",
     "pydantic>=2.14.1",
+    "sounddevice>=0.5.6",
     "uvicorn>=0.54.0",
     "websockets>=17.3",
 ]
