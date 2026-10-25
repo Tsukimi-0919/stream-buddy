@@ -3,9 +3,6 @@
 待ち受けアドレスは設定に含めない (SR-01)。`127.0.0.1` 固定はサーバー側のコードで行う。
 """
 
-# エラーメッセージは日本語の文章なので全角括弧を使う
-# ruff: noqa: RUF001
-
 import tomllib
 from collections.abc import Callable
 from pathlib import Path, PureWindowsPath

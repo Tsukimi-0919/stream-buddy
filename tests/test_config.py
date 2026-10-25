@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 from pathlib import Path
 
 import pytest
