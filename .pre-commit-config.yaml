@@ -3,13 +3,13 @@
 repos:
   # 秘密情報の混入を止める（SR-09）
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
+    rev: 2ca41cc1372d1e939a6a879f18cdc19fc1cac1ce  # frozen: v8.30.0
     hooks:
       - id: gitleaks
 
   # 基本的なファイルチェック
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
       - id: detect-private-key
       - id: check-added-large-files
@@ -25,8 +25,15 @@ repos:
 
   # Python の書式と静的解析（bandit 相当の S ルールは pyproject.toml で有効化する）
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.2
+    rev: f368fb366ff7f2f808dd324b83a6d32267799e19  # frozen: v0.17.2
     hooks:
       - id: ruff-check
         args: ["--fix"]
       - id: ruff-format
+
+
+  # GitHub Actions のワークフローの書き間違いを止める
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
+    hooks:
+      - id: actionlint

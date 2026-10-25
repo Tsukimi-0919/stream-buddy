@@ -1,5 +1,5 @@
 # プルリクエストと main への push で品質・セキュリティチェックを行う。
-# Actions はタグ指定になっている。Phase 0 の最後にコミットハッシュ固定へ切り替える（SR-10）。
+# Actions はタグ指定になっている。Actions はコミットハッシュで固定する（SR-10）。
 name: CI
 
 on:
@@ -20,11 +20,11 @@ jobs:
     name: pre-commit（gitleaks ほか）
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - name: pre-commit を全ファイルに実行
         run: uvx pre-commit run --all-files --show-diff-on-failure
 
@@ -34,7 +34,7 @@ jobs:
     outputs:
       has_python: ${{ steps.check.outputs.has_python }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - id: check
@@ -54,10 +54,10 @@ jobs:
     # pyproject.toml ができるまでは skip（Phase 0 時点ではコードがないため）
     if: needs.detect.outputs.has_python == 'true'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - name: 依存をロックファイルどおりに入れる
         run: uv sync --locked --all-extras --dev
       - name: Lint
