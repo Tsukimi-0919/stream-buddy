@@ -1,0 +1,29 @@
+# stream-buddy の設定ファイルの例
+# すべての項目に既定値があり、書かなかった項目は既定値になります。
+# 知らない項目（書き間違い）があると起動時にエラーになります。
+
+[server]
+port = 8765                  # 1024〜65535
+
+[audio]
+device = ""                  # 空文字なら OS の既定のマイク。それ以外はデバイス名
+speech_threshold_db = -40.0  # -80.0〜0.0。これより大きい音量を「発話中」とみなす
+
+[silence]
+seconds = 20                 # 5〜600。この秒数だけ発話がなければ沈黙ハンターが動く
+
+[hotkeys]
+death = "F9"                 # F1〜F12 のみ
+clear = "F10"                # F1〜F12 のみ。death と同じキーは不可
+
+[keywords]
+death = ["死んだ", "やられた"]  # 各 1〜20 文字、最大 20 個
+clear = ["勝った", "クリア"]    # 同上
+
+[display]
+background = "transparent"   # "transparent" または "chroma"
+
+[log]
+enabled = false              # true のときだけ配信ログを書く
+output_dir = ""              # enabled = true のときは必須。絶対パスのみ
+include_speech_text = false  # 発話テキストを残すか（プライバシーのため既定は false）
