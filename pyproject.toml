@@ -29,6 +29,10 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.2",
 ]
+spike-asr = [
+    "faster-whisper>=1.2.1",
+    "vosk>=0.3.45",
+]
 
 [tool.ruff]
 line-length = 100
