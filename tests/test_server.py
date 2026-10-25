@@ -8,7 +8,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from stream_buddy import server
 from stream_buddy.__main__ import main
-from stream_buddy.config import Config
+from stream_buddy.config import Background, Config, DisplayConfig
 from stream_buddy.protocol import Hello, Say, SayPayload, Speech, SpeechPayload
 
 PORT = 8765
@@ -90,9 +90,15 @@ def test_main_config_error_exits_2(
     assert "[server] port" in capsys.readouterr().err
 
 
-def test_tokens_differ_each_time() -> None:
-    assert server.new_token() != server.new_token()
-    assert len(server.new_token()) >= 43
+@pytest.mark.parametrize(("argv", "expected"), [([], False), (["--demo"], True)])
+def test_main_demo_option(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, argv: list[str], expected: bool
+) -> None:
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(server, "serve", lambda config, token, **kw: calls.append(kw))
+    monkeypatch.chdir(tmp_path)
+    assert main(argv) == 0
+    assert calls == [{"demo": expected}]
 
 
 # HTTP
@@ -169,8 +175,39 @@ def test_security_headers_on_all_responses(
 def test_ws_connects_and_survives_hello(client: TestClient, hub: server.Hub) -> None:
     with client.websocket_connect(f"{WS}/ws?token={TOKEN}", headers=ORIGIN) as ws:
         ws.send_text(HELLO)
+        assert ws.receive_json()["type"] == "display"
         broadcast(client, hub, Speech(payload=SpeechPayload(speaking=True)))
         assert ws.receive_json()["type"] == "speech"
+
+
+@pytest.mark.parametrize("background", ["transparent", "chroma"])
+def test_hello_is_answered_with_display(background: Background) -> None:
+    config = Config(display=DisplayConfig(background=background))
+    app = server.create_app(config, TOKEN)
+    with (
+        TestClient(app, base_url=BASE) as c,
+        c.websocket_connect(f"{WS}/ws?token={TOKEN}", headers=ORIGIN) as ws,
+    ):
+        ws.send_text(HELLO)
+        assert ws.receive_json() == {
+            "v": 0,
+            "type": "display",
+            "payload": {"background": background},
+        }
+
+
+def test_display_reply_goes_only_to_the_sender(client: TestClient, hub: server.Hub) -> None:
+    url = f"{WS}/ws?token={TOKEN}"
+    with (
+        client.websocket_connect(url, headers=ORIGIN) as a,
+        client.websocket_connect(url, headers=ORIGIN) as b,
+    ):
+        a.send_text(HELLO)
+        assert a.receive_json()["type"] == "display"
+        broadcast(client, hub, Speech(payload=SpeechPayload(speaking=True)))
+        # b は hello を送っていないので、最初に届くのは broadcast したメッセージ
+        assert b.receive_json()["type"] == "speech"
+        assert a.receive_json()["type"] == "speech"
 
 
 @pytest.mark.parametrize(
@@ -246,6 +283,8 @@ def test_ws_invalid_messages_are_dropped(client: TestClient, hub: server.Hub, ba
         ws.send_text(bad)
         ws.send_bytes(b"\x00\x01")
         ws.send_text(HELLO)
+        # 捨てたメッセージには何も返さず、hello にだけ返す
+        assert ws.receive_json()["type"] == "display"
         broadcast(client, hub, Say(payload=SayPayload(line_id="a", text="まだいるよ")))
         assert ws.receive_json()["payload"]["text"] == "まだいるよ"
 

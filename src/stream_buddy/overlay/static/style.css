@@ -1,0 +1,149 @@
+/* stream-buddy のページ。見た目の切り替えはクラスと data- 属性で行う */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body[data-background="chroma"] {
+  background: #00ff00;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  font-family: "Yu Gothic UI", "Meiryo", sans-serif;
+}
+
+/* 吹き出し */
+
+.bubble {
+  position: relative;
+  max-width: 90%;
+  margin-bottom: 18px;
+  padding: 12px 18px;
+  border: 3px solid #5a2a3a;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  margin-left: -10px;
+  border-width: 14px 10px 0;
+  border-style: solid;
+  border-color: #5a2a3a transparent transparent;
+}
+
+.bubble-text {
+  margin: 0;
+  color: #3a1a26;
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* 仮のメンダコ */
+
+.buddy {
+  width: 200px;
+}
+
+.buddy-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.body {
+  fill: #f08a8a;
+  stroke: #b8545e;
+  stroke-width: 3;
+}
+
+.fin {
+  fill: #f6a8a0;
+  stroke: #b8545e;
+  stroke-width: 3;
+}
+
+.eye {
+  fill: #2b1a1f;
+}
+
+.mouth-closed {
+  fill: none;
+  stroke: #2b1a1f;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.mouth-open {
+  fill: #6b2030;
+  opacity: 0;
+}
+
+/* 口パク: is-speaking のあいだ、開いた口と閉じた口を交互に出す */
+
+.buddy.is-speaking .mouth-open {
+  animation: mouth-open 0.3s steps(1, end) infinite;
+}
+
+.buddy.is-speaking .mouth-closed {
+  animation: mouth-closed 0.3s steps(1, end) infinite;
+}
+
+@keyframes mouth-open {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes mouth-closed {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* テンション */
+
+.buddy[data-tension="calm"] {
+  animation: float-calm 4s ease-in-out infinite;
+}
+
+.buddy[data-tension="normal"] {
+  animation: float-normal 1.6s ease-in-out infinite;
+}
+
+.buddy[data-tension="high"] {
+  animation: bounce-high 0.5s ease-in-out infinite;
+}
+
+@keyframes float-calm {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+@keyframes float-normal {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes bounce-high {
+  0%, 100% { transform: translateY(0) scale(1.04, 0.96); }
+  50% { transform: translateY(-28px) scale(0.97, 1.03); }
+}

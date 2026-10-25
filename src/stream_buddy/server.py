@@ -9,8 +9,12 @@
 - すべての HTTP 応答に CSP などのヘッダーを付ける (SR-04)
 """
 
+import asyncio
+import contextlib
 import logging
+import mimetypes
 import secrets
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import uvicorn
@@ -21,10 +25,13 @@ from pydantic import ValidationError
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from stream_buddy import demo as demo_mode
 from stream_buddy.config import Config
 from stream_buddy.protocol import (
     MAX_MESSAGE_BYTES,
     SERVER_MESSAGE_TYPES,
+    Display,
+    DisplayPayload,
     Hello,
     ServerMessage,
 )
@@ -33,15 +40,15 @@ HOST = "127.0.0.1"
 MAX_CONNECTIONS = 2
 OVERLAY_DIR = Path(__file__).parent / "overlay"
 
+# Windows ではレジストリの設定で .js が text/plain になることがあり、
+# nosniff のもとではスクリプトが動かなくなるため、明示しておく
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+
 # WebSocket の close コード: メッセージが大きすぎる
 _CLOSE_TOO_BIG = 1009
 
 logger = logging.getLogger(__name__)
-
-
-def new_token() -> str:
-    """起動ごとのトークンを作る。ファイルやログには保存しない。"""
-    return secrets.token_urlsafe(32)
 
 
 def overlay_url(port: int, token: str) -> str:
@@ -122,15 +129,33 @@ class _GuardMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
-def create_app(config: Config, token: str, hub: Hub | None = None) -> FastAPI:
+def create_app(
+    config: Config, token: str, hub: Hub | None = None, *, demo: bool = False
+) -> FastAPI:
     port = config.server.port
     expected_origin = f"http://{HOST}:{port}"
     hub = hub if hub is not None else Hub()
+    # hello への返信。接続したページに現在の背景を知らせる
+    initial_display = Display(payload=DisplayPayload(background=config.display.background))
 
     def token_ok(given: str) -> bool:
         return secrets.compare_digest(given.encode(), token.encode())
 
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        if not demo:
+            yield
+            return
+        task = asyncio.create_task(demo_mode.run_demo(hub.broadcast))
+        try:
+            yield
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
     app = FastAPI(
+        lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -166,14 +191,14 @@ def create_app(config: Config, token: str, hub: Hub | None = None) -> FastAPI:
             return
         try:
             await websocket.accept()
-            await _receive_loop(websocket)
+            await _receive_loop(websocket, initial_display)
         finally:
             hub.remove(websocket)
 
     return app
 
 
-async def _receive_loop(websocket: WebSocket) -> None:
+async def _receive_loop(websocket: WebSocket, hello_reply: ServerMessage) -> None:
     while True:
         message = await websocket.receive()
         if message["type"] == "websocket.disconnect":
@@ -195,12 +220,13 @@ async def _receive_loop(websocket: WebSocket) -> None:
             logger.warning("形の合わないメッセージを破棄しました: %s", reasons)
             continue
         logger.info("ページから hello を受信しました")
+        await websocket.send_text(hello_reply.model_dump_json())
 
 
-def serve(config: Config, token: str) -> None:
+def serve(config: Config, token: str, *, demo: bool = False) -> None:
     """サーバーを起動する。待ち受けアドレスは常に HOST (SR-01)。"""
     uvicorn.run(
-        create_app(config, token),
+        create_app(config, token, demo=demo),
         host=HOST,
         port=config.server.port,
         ws="websockets-sansio",
