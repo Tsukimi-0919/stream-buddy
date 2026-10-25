@@ -112,13 +112,12 @@ class _GuardMiddleware:
 
         if Headers(scope=scope).get("host") != self.expected_host:
             logger.warning("Host ヘッダーが一致しないリクエストを拒否しました")
-            response = PlainTextResponse("Bad Request", status_code=400)
             if scope["type"] == "http":
+                response = PlainTextResponse("Bad Request", status_code=400)
                 await response(scope, receive, send_with_headers)
-            elif "websocket.http.response" in scope.get("extensions", {}):
-                await WebSocket(scope, receive, send_with_headers).send_denial_response(response)
             else:
-                await send_with_headers({"type": "websocket.close", "code": 1008})
+                # 他の WebSocket の拒否と同じく、accept せずに閉じる
+                await WebSocket(scope, receive, send).close()
             return
         await self.app(scope, receive, send_with_headers)
 

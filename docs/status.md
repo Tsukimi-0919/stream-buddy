@@ -24,14 +24,14 @@ Phase 0（設計と守りの準備）は完了。
   - 実行時の依存：pydantic、fastapi、uvicorn（`[standard]` なし）、websockets。開発用に httpx
   - `stream-buddy [--config <path>]` で起動。省略時はカレントフォルダの `config.toml`（なければ既定値）。設定エラーは終了コード 2
   - 起動時にトークン入りの OBS 用 URL をコンソールに1回だけ表示し、配信画面に映さないよう注意を出す
-  - `127.0.0.1` 固定で待ち受け（定数 `HOST`）。`Host` ヘッダーが `127.0.0.1:<port>` 以外なら 400（HTTP・WebSocket とも）
+  - `127.0.0.1` 固定で待ち受け（定数 `HOST`）。`Host` ヘッダーが `127.0.0.1:<port>` 以外なら拒否（HTTP は 400、WebSocket は accept せずに閉じる）
   - `/overlay?token=` は正しいトークンのときだけ仮のページ（`overlay/index.html`）を返し、それ以外は 404。`/docs` などは無効
   - `/static/` は `overlay/static/` フォルダがあるときだけ配信する（フォルダは T-04 で作る）
   - すべての HTTP 応答に CSP・`X-Content-Type-Options`・`Referrer-Policy`・`Cache-Control` を付ける
   - WebSocket は トークン・Origin・同時接続 2 本まで を確認してから受け入れる。受信は `hello` だけを受け付け、それ以外は破棄してエラーの種類だけをログに残す。4 KB 超で close 1009
   - `Hub.broadcast` でサーバー → ページのメッセージを送る
   - URL のトークンが出ないよう、uvicorn のアクセスログと info ログは止めている。FastAPI 組み込みの OpenTelemetry も止めている
-  - `docs/ws-protocol.md` を確定版にした。`docs/threat-model.md` に DNS リバインディングを追記した
+  - `docs/ws-protocol.md` を確定版にした（JSON Schema ファイルは置かず、仕様と `protocol.py` の一致はテストで確認する）。`docs/threat-model.md` に DNS リバインディングを追記した
 
 ## まだないもの
 

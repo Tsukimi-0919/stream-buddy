@@ -4,7 +4,6 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.testclient import WebSocketDenialResponse
 from starlette.websockets import WebSocketDisconnect
 
 from stream_buddy import server
@@ -195,14 +194,24 @@ def test_ws_rejected(client: TestClient, query: str, headers: dict[str, str]) ->
         pass
 
 
-def test_ws_wrong_host_is_400(client: TestClient) -> None:
-    headers = {**ORIGIN, "host": "evil.example:8765"}
+@pytest.mark.parametrize("host", ["evil.example:8765", "localhost:8765", "127.0.0.1:9999"])
+def test_ws_wrong_host_is_rejected_without_accept(
+    client: TestClient, hub: server.Hub, host: str
+) -> None:
+    headers = {**ORIGIN, "host": host}
+    # HTTP の 400 応答 (WebSocketDenialResponse) ではなく、accept せずに閉じる
     with (
-        pytest.raises(WebSocketDenialResponse) as exc,
+        pytest.raises(WebSocketDisconnect),
         client.websocket_connect(f"{WS}/ws?token={TOKEN}", headers=headers),
     ):
         pass
-    assert exc.value.status_code == 400
+    # 拒否した接続は数に入らず、正しい接続は2本まで受け入れられる
+    url = f"{WS}/ws?token={TOKEN}"
+    with (
+        client.websocket_connect(url, headers=ORIGIN),
+        client.websocket_connect(url, headers=ORIGIN),
+    ):
+        pass
 
 
 def test_ws_third_connection_is_rejected(client: TestClient, hub: server.Hub) -> None:
