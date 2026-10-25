@@ -44,3 +44,6 @@ desktop.ini
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# ===== Claude アプリの出力フォルダ =====
+Claude outputs/
