@@ -1,0 +1,8 @@
+# 改行コードをリポジトリ内では LF に統一する（Windows でも差分が崩れないように）
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.exe binary

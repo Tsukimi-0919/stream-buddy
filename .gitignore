@@ -1,0 +1,46 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.python-version.local
+
+# ===== ツールのキャッシュ =====
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ===== ビルド成果物（exe は GitHub Actions でのみ作る） =====
+build/
+dist/
+*.spec.bak
+
+# ===== 秘密情報・ローカル設定 =====
+.env
+.env.*
+*.local.toml
+config.local.toml
+.claude/settings.local.json
+
+# ===== 実行時に生まれるもの（公開しない） =====
+logs/
+*.log
+recordings/
+*.wav
+*.mp3
+*.flac
+
+# ===== 音声認識モデル（大きいので配布元から取得する） =====
+models/
+
+# ===== OS / エディタ =====
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/

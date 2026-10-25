@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git rebase:*)",
+      "Bash(git config:*)",
+      "Bash(git filter-repo:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(Invoke-WebRequest:*)",
+      "Bash(iwr:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.gitignore)",
+      "Edit(./.gitattributes)",
+      "Edit(./.pre-commit-config.yaml)",
+      "Edit(./.github/**)",
+      "Edit(./.claude/**)",
+      "Edit(./CLAUDE.md)",
+      "Edit(./LICENSE)",
+      "Edit(./SECURITY.md)"
+    ]
+  }
+}
