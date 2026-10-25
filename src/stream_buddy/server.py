@@ -26,7 +26,9 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from stream_buddy import demo as demo_mode
+from stream_buddy.audio import BLOCK_SECONDS, Microphone
 from stream_buddy.config import Config
+from stream_buddy.detect import SpeechDetector
 from stream_buddy.protocol import (
     MAX_MESSAGE_BYTES,
     SERVER_MESSAGE_TYPES,
@@ -34,6 +36,8 @@ from stream_buddy.protocol import (
     DisplayPayload,
     Hello,
     ServerMessage,
+    Speech,
+    SpeechPayload,
 )
 
 HOST = "127.0.0.1"
@@ -129,8 +133,49 @@ class _GuardMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
+async def _cancel(task: asyncio.Task[None]) -> None:
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+async def _relay_speech(
+    microphone: Microphone, threshold_db: float, hub: Hub, stack: contextlib.AsyncExitStack
+) -> None:
+    """マイクの音量から発話を判定し、変化したときだけ speech を送る。"""
+    loop = asyncio.get_running_loop()
+    detector = SpeechDetector(threshold_db, BLOCK_SECONDS)
+    changes: asyncio.Queue[bool] = asyncio.Queue()
+
+    def on_level_in_loop(level_db: float) -> None:
+        changed = detector.update(level_db)
+        if changed is not None:
+            changes.put_nowait(changed)
+
+    def on_level(level_db: float) -> None:
+        # 音声のスレッドから呼ばれる。渡すのは音量の数値だけ
+        with contextlib.suppress(RuntimeError):  # 終了処理中でループが閉じている
+            loop.call_soon_threadsafe(on_level_in_loop, level_db)
+
+    async def send_changes() -> None:
+        # 1 本のタスクで順番どおりに送る
+        while True:
+            speaking = await changes.get()
+            await hub.broadcast(Speech(payload=SpeechPayload(speaking=speaking)))
+
+    stack.push_async_callback(_cancel, asyncio.create_task(send_changes()))
+    # 閉じるのはタスクを止めるより先 (コールバックは後入れ先出しで呼ばれる)
+    stack.callback(microphone.close)
+    microphone.start(on_level)
+
+
 def create_app(
-    config: Config, token: str, hub: Hub | None = None, *, demo: bool = False
+    config: Config,
+    token: str,
+    hub: Hub | None = None,
+    *,
+    demo: bool = False,
+    microphone: Microphone | None = None,
 ) -> FastAPI:
     port = config.server.port
     expected_origin = f"http://{HOST}:{port}"
@@ -143,16 +188,14 @@ def create_app(
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        if not demo:
+        async with contextlib.AsyncExitStack() as stack:
+            if demo:
+                stack.push_async_callback(
+                    _cancel, asyncio.create_task(demo_mode.run_demo(hub.broadcast))
+                )
+            if microphone is not None:
+                await _relay_speech(microphone, config.audio.speech_threshold_db, hub, stack)
             yield
-            return
-        task = asyncio.create_task(demo_mode.run_demo(hub.broadcast))
-        try:
-            yield
-        finally:
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
 
     app = FastAPI(
         lifespan=lifespan,
@@ -223,10 +266,12 @@ async def _receive_loop(websocket: WebSocket, hello_reply: ServerMessage) -> Non
         await websocket.send_text(hello_reply.model_dump_json())
 
 
-def serve(config: Config, token: str, *, demo: bool = False) -> None:
+def serve(
+    config: Config, token: str, *, demo: bool = False, microphone: Microphone | None = None
+) -> None:
     """サーバーを起動する。待ち受けアドレスは常に HOST (SR-01)。"""
     uvicorn.run(
-        create_app(config, token, demo=demo),
+        create_app(config, token, demo=demo, microphone=microphone),
         host=HOST,
         port=config.server.port,
         ws="websockets-sansio",

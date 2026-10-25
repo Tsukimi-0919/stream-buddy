@@ -98,7 +98,7 @@ def test_main_demo_option(
     monkeypatch.setattr(server, "serve", lambda config, token, **kw: calls.append(kw))
     monkeypatch.chdir(tmp_path)
     assert main(argv) == 0
-    assert calls == [{"demo": expected}]
+    assert [kw["demo"] for kw in calls] == [expected]
 
 
 # HTTP
