@@ -3,8 +3,26 @@
   <head>
     <meta charset="utf-8">
     <title>stream-buddy</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/app.js" defer></script>
   </head>
-  <body>
-    <p>stream-buddy</p>
+  <body data-background="transparent">
+    <main class="stage">
+      <div id="bubble" class="bubble" hidden>
+        <p id="bubble-text" class="bubble-text"></p>
+      </div>
+      <!-- 仮のメンダコ。本番の画像への差し替えは後のタスクで行う -->
+      <div id="buddy" class="buddy" data-tension="normal">
+        <svg class="buddy-svg" viewBox="0 0 200 170" role="img" aria-label="メンダコ (仮)">
+          <ellipse class="fin" cx="52" cy="52" rx="18" ry="11"/>
+          <ellipse class="fin" cx="148" cy="52" rx="18" ry="11"/>
+          <path class="body" d="M20 135 C20 70 55 40 100 40 C145 40 180 70 180 135 C165 150 150 140 140 135 C125 152 112 145 100 138 C88 145 75 152 60 135 C50 140 35 150 20 135 Z"/>
+          <circle class="eye" cx="76" cy="92" r="7"/>
+          <circle class="eye" cx="124" cy="92" r="7"/>
+          <path class="mouth mouth-closed" d="M90 112 Q100 119 110 112"/>
+          <ellipse class="mouth mouth-open" cx="100" cy="115" rx="7" ry="8"/>
+        </svg>
+      </div>
+    </main>
   </body>
 </html>

@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 1：実装中（T-03 完了）**
+**Phase 1：実装中（T-04 完了）**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -25,21 +25,35 @@ Phase 0（設計と守りの準備）は完了。
   - `stream-buddy [--config <path>]` で起動。省略時はカレントフォルダの `config.toml`（なければ既定値）。設定エラーは終了コード 2
   - 起動時にトークン入りの OBS 用 URL をコンソールに1回だけ表示し、配信画面に映さないよう注意を出す
   - `127.0.0.1` 固定で待ち受け（定数 `HOST`）。`Host` ヘッダーが `127.0.0.1:<port>` 以外なら拒否（HTTP は 400、WebSocket は accept せずに閉じる）
-  - `/overlay?token=` は正しいトークンのときだけ仮のページ（`overlay/index.html`）を返し、それ以外は 404。`/docs` などは無効
-  - `/static/` は `overlay/static/` フォルダがあるときだけ配信する（フォルダは T-04 で作る）
+  - `/overlay?token=` は正しいトークンのときだけページ（`overlay/index.html`）を返し、それ以外は 404。`/docs` などは無効
+  - `/static/` は `overlay/static/` フォルダがあるときだけ配信する
   - すべての HTTP 応答に CSP・`X-Content-Type-Options`・`Referrer-Policy`・`Cache-Control` を付ける
   - WebSocket は トークン・Origin・同時接続 2 本まで を確認してから受け入れる。受信は `hello` だけを受け付け、それ以外は破棄してエラーの種類だけをログに残す。4 KB 超で close 1009
   - `Hub.broadcast` でサーバー → ページのメッセージを送る
   - URL のトークンが出ないよう、uvicorn のアクセスログと info ログは止めている。FastAPI 組み込みの OpenTelemetry も止めている
   - `docs/ws-protocol.md` を確定版にした（JSON Schema ファイルは置かず、仕様と `protocol.py` の一致はテストで確認する）。`docs/threat-model.md` に DNS リバインディングを追記した
 
+- T-04：OBS 用のページ（`overlay/index.html`、`overlay/static/style.css`、`overlay/static/app.js`）
+  - 仮のメンダコをオリジナルの SVG で描画（丸い体、ひれ、目、閉じた口と開いた口）
+  - WebSocket で接続し `hello` を送る。切れたら 1 秒から倍々、上限 10 秒で再接続し、つながったら 1 秒に戻す
+  - 受信メッセージは形を厳密に確認し、合わないものは無視。`speech`（口パク）、`tension`（calm / normal / high のアニメーション）、`say`（吹き出しを 5 秒表示）、`display`（透過 / 緑）を表示する。`effect` は受け取るだけ
+  - 文字は `textContent` のみ。インラインのスクリプト・スタイル・`console` は使わない（テストで検査）
+  - サーバーは `hello` を受け取ると、そのページにだけ設定の `display.background` を送る
+  - `stream-buddy --demo` で、決まった流れ（`src/stream_buddy/demo.py`）を 2.5 秒間隔で繰り返し送る
+  - Windows のレジストリの設定に左右されないよう、`.js` と `.css` の Content-Type を明示した
+
 ## まだないもの
 
 - 機能モジュール（audio / detect / hotkey / state / log）
-- 本番の OBS 用ページ（メンダコの表示、吹き出し、再接続）と `overlay/static/`
-- メンダコの画像
+- 死亡・クリアの演出（Phase 3）
+- メンダコの本番の画像（今は仮の SVG）
 - ログ出力先フォルダの存在確認・書き込み時のパス確認（ログのタスクで行う）
+
+## 未解決の課題
+
+- トークンは起動ごとに変わるため、stream-buddy を再起動するとページは古いトークンで再接続を試み続け、つながらない（OBS の URL の設定し直しが必要）。対応方針は未決
 
 ## 次にやること
 
-- T-04（OBS 用のページ）
+- 上の「未解決の課題」の方針決め
+- 次のタスク（T-05）

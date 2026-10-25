@@ -19,6 +19,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=Path("config.toml"),
         help="設定ファイルのパス (省略時はカレントフォルダの config.toml。なければ既定値)",
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="見え方の確認用に、決まった流れのメッセージを繰り返し送る",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -32,7 +37,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print("OBS のブラウザソースに次の URL を設定してください:")
     print(server.overlay_url(config.server.port, token))
     print("この URL を配信画面に映さないでください。", flush=True)
-    server.serve(config, token)
+    if args.demo:
+        print("デモモードで起動します。")
+    server.serve(config, token, demo=args.demo)
     return 0
 
 
