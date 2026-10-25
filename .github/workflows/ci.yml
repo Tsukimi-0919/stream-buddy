@@ -20,7 +20,7 @@ jobs:
     name: pre-commit（gitleaks ほか）
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -34,7 +34,7 @@ jobs:
     outputs:
       has_python: ${{ steps.check.outputs.has_python }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - id: check
@@ -54,7 +54,7 @@ jobs:
     # pyproject.toml ができるまでは skip（Phase 0 時点ではコードがないため）
     if: needs.detect.outputs.has_python == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v5
