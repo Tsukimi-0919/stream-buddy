@@ -7,7 +7,7 @@
 
 - URL：`ws://127.0.0.1:<port>/ws?token=<token>`
 - `<port>` は設定ファイルの `server.port`（既定 8765、1024〜65535）。待ち受けアドレスは `127.0.0.1` 固定で変えられない
-- `<token>` は起動ごとに作るランダムな文字列（`secrets.token_urlsafe(32)`）。ページの URL（`/overlay?token=<token>`）と同じもの
+- `<token>` はランダムな文字列（`secrets.token_urlsafe(32)`）。初回に作って保存し、使い回す。`--reset-token` で作り直せる（ADR 0002）。ページの URL（`/overlay?token=<token>`）と同じもの
 - サーバーは接続を受け入れる前に次をすべて確認し、どれかが合わなければ接続を受け入れずに閉じる（HTTP 403。理由は返さない）
   - `token` が一致する（比較は `secrets.compare_digest`）
   - `Origin` ヘッダーが `http://127.0.0.1:<port>` と完全一致する（`Origin` がない場合も拒否）

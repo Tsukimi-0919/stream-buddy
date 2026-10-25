@@ -101,11 +101,6 @@ def test_main_demo_option(
     assert calls == [{"demo": expected}]
 
 
-def test_tokens_differ_each_time() -> None:
-    assert server.new_token() != server.new_token()
-    assert len(server.new_token()) >= 43
-
-
 # HTTP
 
 

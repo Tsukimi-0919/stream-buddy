@@ -51,11 +51,6 @@ _CLOSE_TOO_BIG = 1009
 logger = logging.getLogger(__name__)
 
 
-def new_token() -> str:
-    """起動ごとのトークンを作る。ファイルやログには保存しない。"""
-    return secrets.token_urlsafe(32)
-
-
 def overlay_url(port: int, token: str) -> str:
     return f"http://{HOST}:{port}/overlay?token={token}"
 

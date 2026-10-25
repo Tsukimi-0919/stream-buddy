@@ -162,7 +162,7 @@ def test_demo_steps_are_valid_protocol_messages() -> None:
 def test_demo_steps_follow_the_spec() -> None:
     steps = [(m.type, m.payload.model_dump()) for m in demo.DEMO_STEPS]
     texts = [p["text"] for t, p in steps if t == "say"]
-    assert texts == ["ふむふむ、いい感じだね～", "うおおお！"]  # noqa: RUF001
+    assert texts == ["ふむふむ、いい感じだね～", "うおおお！"]
     assert [(t, p) for t, p in steps if t != "say"] == [
         ("tension", {"level": "calm"}),
         ("speech", {"speaking": True}),

@@ -41,6 +41,11 @@ Phase 0（設計と守りの準備）は完了。
   - サーバーは `hello` を受け取ると、そのページにだけ設定の `display.background` を送る
   - `stream-buddy --demo` で、決まった流れ（`src/stream_buddy/demo.py`）を 2.5 秒間隔で繰り返し送る
   - Windows のレジストリの設定に左右されないよう、`.js` と `.css` の Content-Type を明示した
+  - トークンを保存して使い回すようにした（ADR 0002、`src/stream_buddy/token_store.py`）
+    - 初回に作って `%LOCALAPPDATA%\stream-buddy\token` に保存し、2回目以降は読み込む。形が違えば作り直す。書き込みは一時ファイル経由で置き換え
+    - `--reset-token` で作り直し、OBS の URL の設定し直しを案内する。`LOCALAPPDATA` がなければ終了コード 2
+    - stream-buddy を再起動しても URL が変わらず、ページは自動で再接続する
+    - テストは `tests/conftest.py` で `LOCALAPPDATA` を一時フォルダに差し替え、実際の場所には書かない
 
 ## まだないもの
 
@@ -49,11 +54,6 @@ Phase 0（設計と守りの準備）は完了。
 - メンダコの本番の画像（今は仮の SVG）
 - ログ出力先フォルダの存在確認・書き込み時のパス確認（ログのタスクで行う）
 
-## 未解決の課題
-
-- トークンは起動ごとに変わるため、stream-buddy を再起動するとページは古いトークンで再接続を試み続け、つながらない（OBS の URL の設定し直しが必要）。対応方針は未決
-
 ## 次にやること
 
-- 上の「未解決の課題」の方針決め
 - 次のタスク（T-05）

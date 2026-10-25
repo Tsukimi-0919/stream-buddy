@@ -16,8 +16,8 @@ from stream_buddy.protocol import (
 # メッセージを送る間隔 (秒)
 DEMO_INTERVAL_SECONDS = 2.5
 
-DEMO_LINE_CALM = "ふむふむ、いい感じだね～"  # noqa: RUF001
-DEMO_LINE_HIGH = "うおおお！"  # noqa: RUF001
+DEMO_LINE_CALM = "ふむふむ、いい感じだね～"
+DEMO_LINE_HIGH = "うおおお！"
 
 DEMO_STEPS: tuple[ServerMessage, ...] = (
     # 1. 落ち着いて少ししゃべる

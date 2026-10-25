@@ -30,6 +30,7 @@ Python バックエンドがすべての判断を行い、OBS のページは「
 | `hotkey` | `RegisterHotKey` で決めたキーだけを受け取る | ホットキーイベント | FR-08, SR-05 |
 | `state` | テンション管理、沈黙タイマー、セリフ選択 | 画面への指示 | FR-04〜FR-06 |
 | `server` | ページの配信、WebSocket、認証 | `ws-protocol.md` のメッセージ | FR-03, SR-01〜SR-03 |
+| `token_store` | 認証用トークンの作成・保存・読み込み（`%LOCALAPPDATA%\stream-buddy\token`） | トークン | SR-02 |
 | `log` | 配信ログの Markdown 出力 | Markdown ファイル | FR-10, SR-06 |
 | `overlay/`（HTML/CSS/JS） | メンダコ表示、吹き出し、演出 | なし（表示のみ） | FR-03, FR-09, SR-04 |
 
@@ -42,7 +43,7 @@ Python バックエンドがすべての判断を行い、OBS のページは「
 ## 起動の流れ（予定）
 
 1. `config` を読み込み、検証する
-2. 起動ごとにランダムなトークンを作る
+2. 保存済みのトークンを読み込む。初回、形が違うとき、`--reset-token` のときは作り直して保存する（ADR 0002）
 3. `server` が `127.0.0.1` で待ち受けを始める
 4. OBS 用の URL（トークン入り）をコンソールに表示する
 5. `audio`・`detect`・`hotkey` を開始する
