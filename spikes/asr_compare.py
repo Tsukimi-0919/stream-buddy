@@ -19,6 +19,7 @@ import os
 import sys
 import time
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -40,8 +41,16 @@ WHISPER_CACHE_DIR = MODELS_DIR / "faster-whisper"
 
 KEYWORDS = ["死んだ", "やられた", "勝った", "クリア"]
 NON_KEYWORDS = ["しんどい", "かったるい", "クリーム", "今日はいい天気"]
-# Vosk の文法に渡す言い方。語彙にない場合は、語彙にある分け方 (例: "死ん だ") に書き換えて試す
-VOSK_PHRASES = {keyword: keyword for keyword in KEYWORDS}
+# Vosk の文法に渡す言い方。「死んだ」「勝った」は 1 語では語彙にないため、語彙にある単語の句にする
+VOSK_PHRASES = {
+    "死んだ": "死ん だ",
+    "やられた": "やられた",
+    "勝った": "勝っ た",
+    "クリア": "クリア",
+}
+# Vosk の文法に入れる、キーワードではない「おとりの言葉」。似た音をキーワードに寄せないために使う。
+# おとりとして認識されたら「検知なし」と判定する
+VOSK_DECOYS = ["クリーム", "しんどい", "かったるい", "買った"]
 
 ENGINE_NAMES = ["vosk", "whisper-tiny", "whisper-base"]
 MAX_SECONDS = 3.0
@@ -71,9 +80,14 @@ class SpikeError(Exception):
 # エンジン
 
 
-def find_keyword(text: str) -> str | None:
-    """書き起こしにキーワードが含まれていれば、そのキーワード (最初に見つかったもの)。"""
+def find_keyword(text: str, decoys: Sequence[str] = ()) -> str | None:
+    """書き起こしにキーワードが含まれていれば、そのキーワード (最初に見つかったもの)。
+
+    おとりの言葉が含まれていれば、キーワードがあっても検知なしとする。
+    """
     compact = "".join(text.split())
+    if any("".join(decoy.split()) in compact for decoy in decoys):
+        return None
     for keyword in KEYWORDS:
         if keyword in compact:
             return keyword
@@ -84,6 +98,7 @@ class Engine(Protocol):
     name: str
     load_ms: float
     model_dir: Path
+    decoys: Sequence[str]
 
     def transcribe(self, samples: Audio) -> str: ...
 
@@ -103,17 +118,19 @@ class VoskEngine:
         self._model = vosk.Model(model_path=str(VOSK_MODEL_DIR))
         self.load_ms = (time.perf_counter() - start) * 1000
         self._vosk = vosk
+        self.decoys: Sequence[str] = VOSK_DECOYS
+        self.phrases = [*VOSK_PHRASES.values(), *self.decoys]
         self.missing_words = [
             word
-            for phrase in VOSK_PHRASES.values()
+            for phrase in self.phrases
             for word in phrase.split()
             if self._model.vosk_model_find_word(word) < 0
         ]
-        # キーワードだけを候補にし、それ以外は [unk] として受け付ける
-        self._grammar = json.dumps([*VOSK_PHRASES.values(), "[unk]"], ensure_ascii=False)
+        # キーワードとおとりの言葉だけを候補にし、それ以外は [unk] として受け付ける
+        self.grammar = json.dumps([*self.phrases, "[unk]"], ensure_ascii=False)
 
     def transcribe(self, samples: Audio) -> str:
-        recognizer = self._vosk.KaldiRecognizer(self._model, audio.SAMPLE_RATE, self._grammar)
+        recognizer = self._vosk.KaldiRecognizer(self._model, audio.SAMPLE_RATE, self.grammar)
         pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
         recognizer.AcceptWaveform(pcm)
         text = str(json.loads(recognizer.FinalResult()).get("text", ""))
@@ -121,6 +138,8 @@ class VoskEngine:
 
 
 class WhisperEngine:
+    decoys: Sequence[str] = ()
+
     def __init__(self, size: str) -> None:
         from faster_whisper import WhisperModel
         from faster_whisper.utils import download_model
@@ -190,7 +209,8 @@ class EngineResult:
         text = self.engine.transcribe(samples)
         elapsed_ms = (time.perf_counter() - start) * 1000
         cpu_ms = (time.process_time() - cpu_start) * 1000
-        trial = Trial(prompt, expected, find_keyword(text), text, elapsed_ms, cpu_ms)
+        detected = find_keyword(text, self.engine.decoys)
+        trial = Trial(prompt, expected, detected, text, elapsed_ms, cpu_ms)
         self.trials.append(trial)
         return trial
 
@@ -385,8 +405,11 @@ def print_report(results: list[EngineResult]) -> None:
         print(f"### {result.engine.name}\n")
         print(f"- フォルダ：`{result.engine.model_dir.relative_to(ROOT).as_posix()}`")
         print(f"- 合計サイズ：{_mb(size)}")
-        if isinstance(result.engine, VoskEngine) and result.engine.missing_words:
-            print(f"- 語彙にない単語：{', '.join(result.engine.missing_words)}")
+        if isinstance(result.engine, VoskEngine):
+            print(f"- 文法：`{result.engine.grammar}`")
+            print(f"- おとりの言葉：{', '.join(result.engine.decoys)}")
+            if result.engine.missing_words:
+                print(f"- 語彙にない単語：{', '.join(result.engine.missing_words)}")
         print("\n| ファイル | サイズ | SHA-256 |")
         print("| --- | --- | --- |")
         for name, file_size, digest in large:
@@ -426,11 +449,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{name} のモデルを読み込んでいます…", flush=True)
             engine = create_engine(name)
             print(f"  読み込み: {engine.load_ms:.0f} ms")
-            if isinstance(engine, VoskEngine) and engine.missing_words:
-                print(
-                    f"  注意: Vosk の語彙にない単語があります: {', '.join(engine.missing_words)}"
-                    " (spikes/README.md の「Vosk の語彙」を参照)"
-                )
+            if isinstance(engine, VoskEngine):
+                print(f"  文法: {engine.grammar}")
+                if engine.missing_words:
+                    missing = ", ".join(engine.missing_words)
+                    print(
+                        f"  注意: Vosk の語彙にない単語があります: {missing}"
+                        " (spikes/README.md の「Vosk の語彙」を参照)"
+                    )
             result = EngineResult(engine)
             result.warm_up()
             print(f"  初回の準備: {result.warmup_ms:.0f} ms")
