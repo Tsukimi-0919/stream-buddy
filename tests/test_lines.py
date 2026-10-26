@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from stream_buddy.config import ConfigError
+from stream_buddy.config import UTF8_BOM, ConfigError
 from stream_buddy.lines import (
     MAX_FILE_BYTES,
     SCHEMA,
@@ -113,6 +113,24 @@ def test_not_utf8_is_error(tmp_path: Path) -> None:
     path.write_bytes(toml_text(valid_lists(event__death=["死んだ"])).encode("cp932"))
     with pytest.raises(LinesError, match="UTF-8"):
         load_lines(str(path))
+
+
+def test_utf8_with_bom_is_ok(tmp_path: Path) -> None:
+    path = tmp_path / "lines.toml"
+    text = toml_text(valid_lists(event__death=["ちーん"]))
+    path.write_bytes(UTF8_BOM + text.encode("utf-8"))
+    assert load_lines(str(path)).get("event", "death") == ("ちーん",)
+
+
+def test_bom_inside_a_line_is_error(tmp_path: Path) -> None:
+    # 先頭の BOM だけを取り除く。セリフの中の U+FEFF は制御文字のまま
+    text = toml_text(valid_lists(event__death=["ok", "\ufeffちーん", "ちー\ufeffん"]))
+    path = tmp_path / "lines.toml"
+    path.write_bytes(UTF8_BOM + text.encode("utf-8"))
+    with pytest.raises(LinesError) as exc:
+        load_lines(str(path))
+    assert "[event] death の 2 番目に制御文字（U+FEFF）が含まれています" in str(exc.value)
+    assert "[event] death の 3 番目に制御文字（U+FEFF）が含まれています" in str(exc.value)
 
 
 def test_file_up_to_64kb_is_ok(tmp_path: Path) -> None:

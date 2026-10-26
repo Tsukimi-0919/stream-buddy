@@ -24,10 +24,17 @@ Background = Literal["transparent", "chroma"]
 # 指定値をエラーメッセージに含めない項目 (個人的な情報を含みうるため)
 _HIDDEN_VALUE_LOCS = {("log", "output_dir"), ("lines", "file")}
 _MAX_SHOWN_VALUE_LEN = 40
+# メモ帳などが先頭に付けることがある、UTF-8 の BOM
+UTF8_BOM = b"\xef\xbb\xbf"
 
 
 class ConfigError(Exception):
     """設定ファイルが読めない、または内容が正しくないときの例外。"""
+
+
+def decode_utf8(data: bytes) -> str:
+    """UTF-8 の文字列にする。先頭の BOM だけを取り除く (それ以外の位置の U+FEFF は残す)。"""
+    return data.removeprefix(UTF8_BOM).decode("utf-8")
 
 
 def _in_range[T: (int, float)](low: T, high: T) -> Callable[[T], T]:
@@ -126,8 +133,7 @@ def load_config(path: Path | None) -> Config:
     if path is None or not path.exists():
         return Config()
     try:
-        with path.open("rb") as f:
-            data = tomllib.load(f)
+        data = tomllib.loads(decode_utf8(path.read_bytes()))
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"設定ファイルが TOML として正しくありません: {e}") from None
     except UnicodeDecodeError:

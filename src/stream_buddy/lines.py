@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path, PureWindowsPath
 
-from stream_buddy.config import ConfigError
+from stream_buddy.config import ConfigError, decode_utf8
 from stream_buddy.protocol import MAX_SAY_TEXT_LENGTH
 from stream_buddy.state.events import Situation, TensionLevel
 
@@ -62,7 +62,7 @@ def load_lines(file: str = "") -> LineBook:
     if len(data) > MAX_FILE_BYTES:
         raise LinesError(f"{where}が大きすぎます（上限 {MAX_FILE_BYTES // 1024} KB）")
     try:
-        parsed = tomllib.loads(data.decode("utf-8"))
+        parsed = tomllib.loads(decode_utf8(data))
     except UnicodeDecodeError:
         raise LinesError(f"{where}は UTF-8 で保存してください") from None
     except tomllib.TOMLDecodeError as e:

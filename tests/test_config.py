@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from stream_buddy.config import Config, ConfigError, load_config
+from stream_buddy.config import UTF8_BOM, Config, ConfigError, load_config
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 
@@ -184,6 +184,25 @@ def test_not_utf8(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_bytes('[audio]\ndevice = "マイク"\n'.encode("cp932"))
     with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_utf8_with_bom(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_bytes(UTF8_BOM + '[audio]\ndevice = "マイク"\n'.encode())
+    assert load_config(path).audio.device == "マイク"
+    path.write_bytes(UTF8_BOM + EXAMPLE.read_bytes())
+    assert load_config(path) == Config()
+
+
+def test_bom_is_removed_only_at_the_start(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    # 文字列の中の U+FEFF は取り除かずに残す
+    path.write_bytes(UTF8_BOM + '[audio]\ndevice = "\ufeffマイク"\n'.encode())
+    assert load_config(path).audio.device == "\ufeffマイク"
+    # 2 つ目の BOM は TOML の一部として扱われ、エラーになる
+    path.write_bytes(UTF8_BOM * 2 + b"[server]\nport = 8765\n")
+    with pytest.raises(ConfigError, match="TOML として正しくありません"):
         load_config(path)
 
 
