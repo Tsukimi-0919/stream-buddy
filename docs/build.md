@@ -12,6 +12,8 @@ uv run --group build python scripts/build_exe.py --mode onedir
 uv run --group build python scripts/build_exe.py --mode onefile
 ```
 
+`--mode` を指定しないときは onedir になる（配布に使う形。ADR 0004）。
+
 | モード | 出力の場所 | 中身 |
 | --- | --- | --- |
 | onedir | `dist/stream-buddy/` | `stream-buddy.exe`、`_internal/`（Python 本体とライブラリ）、`config.example.toml` |

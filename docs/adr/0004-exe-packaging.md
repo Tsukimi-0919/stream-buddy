@@ -1,7 +1,7 @@
 # ADR 0004：exe の形（onedir と onefile）
 
-- 状態：提案中
-- 日付：（確認後に記入）
+- 状態：採用
+- 日付：2026-10-26
 
 ## 背景
 
@@ -42,21 +42,36 @@ PyInstaller には、フォルダで配る **onedir** と、1 ファイルで配
 
 ## 確認結果
 
-（`docs/build.md` の手順で確認して記入する）
+`docs/build.md` の手順で、人間が確認した（2026-10-26）。onedir と onefile の両方を、リポジトリの外のフォルダにコピーして起動した。
 
-| 形 | サイズ | `stream-buddy.exe` の SHA-256 | 起動から URL 表示まで | Defender の手動スキャン | スキャン後の起動 |
-| --- | --- | --- | --- | --- | --- |
-| onedir |  |  |  |  |  |
-| onefile |  |  |  |  |  |
+| 形 | サイズ | `stream-buddy.exe` の SHA-256 | 起動から URL 表示まで | Defender の手動スキャン後の起動 |
+| --- | --- | --- | --- | --- |
+| onedir | 67.2 MB（フォルダ全体） | `82380281593b2441ca63d08c31887da59eb2250bbe06414c408b2cd27510fbaa` | 計測していない（体感で onedir がわずかに遅いが、気にならない程度） | ブロックされずに起動できた |
+| onefile | 28.3 MB（exe） | `5f377742895f355e0f772c5141790b3f5d59e0c7eb8f711db6cdda15241e3ffc` | 計測していない | ブロックされずに起動できた |
 
-### 気づいたこと
-
-- （確認で気づいたことを記入する）
+- どちらも `--list-devices`、`--demo` での OBS の表示、`--demo` なしでの口パクが動いた
+- SHA-256 は、確認に使ったビルド（T-07 の作業で最後にビルドしたもの）の値
 
 ## 決定
 
-（確認後に記入）
+- **onedir を採用し、フォルダを zip にして配布する**
+- 理由
+  - 起動の速さの差は気にならない程度だったため、決め手にならない
+  - 1 ファイル形式は、起動時に一時フォルダへ展開する動きが誤検知されやすいとされる。そのため onedir を選ぶ
+- `scripts/build_exe.py` の既定のモード（`--mode` を指定しないとき）を onedir にする
+
+### 注意
+
+- 今回の Defender の確認は、自分の PC でビルドしたファイルに対するもの
+- ダウンロードしたファイル（Mark of the Web 付き）での SmartScreen と Defender の確認は、
+  Phase 4 で GitHub Actions のビルドを Releases に置いたときに行い、必要ならこの決定を見直す
 
 ## 結果
 
-（採用した形を GitHub Actions でのビルドとリリースに反映する別の作業、README に書くことなどを記入）
+課題
+
+- 使わない PortAudio の DLL（32bit・arm64・ASIO 版・macOS 用。約 2 MB）が含まれる。
+  sounddevice 用の PyInstaller の設定（pyinstaller-hooks-contrib）がまとめて含めるため。誤検知が出る場合は Phase 4 で除外する
+- 最初のビルドで mypy・pytest が exe に入り込んでいたため、ビルドスクリプトで除外した。
+  依存を追加したときは、exe に入るものを確認する
+- PyInstaller のビルドは毎回 SHA-256 が変わる。配布物の正しさは、CI でのビルドと attestation で保証する（SR-11）

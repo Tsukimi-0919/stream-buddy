@@ -2,8 +2,10 @@
 
 ビルドの設定はすべてこのファイルにまとめる。Nuitka に切り替えるときは、ここだけを直す。
 
-    uv run --group build python scripts/build_exe.py --mode onedir
+    uv run --group build python scripts/build_exe.py                  (onedir)
     uv run --group build python scripts/build_exe.py --mode onefile
+
+配布には onedir を使う (ADR 0004)。
 
 出力先
 - onedir:  dist/stream-buddy/stream-buddy.exe (とその隣の _internal/)
@@ -202,7 +204,10 @@ def build(mode: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="stream-buddy を PyInstaller で exe にする")
     parser.add_argument(
-        "--mode", choices=["onedir", "onefile"], required=True, help="フォルダか、1 ファイルか"
+        "--mode",
+        choices=["onedir", "onefile"],
+        default="onedir",
+        help="フォルダか、1 ファイルか (既定: onedir。配布に使う形、ADR 0004)",
     )
     args = parser.parse_args(argv)
     try:

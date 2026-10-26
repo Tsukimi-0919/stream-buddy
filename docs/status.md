@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 1：実装中（T-07 の exe 化の試作完了。人間の確認待ち）**
+**Phase 1：実装中（T-07 の exe 化の試作完了。onedir を採用）**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -73,8 +73,10 @@ Phase 0（設計と守りの準備）は完了。
   - 出力は onedir が `dist/stream-buddy/`、onefile が `dist/stream-buddy-onefile/`。どちらも exe の隣に `config.example.toml` を置く。コンソールは表示し、UPX は使わない
   - OBS 用のページは exe の中の `stream_buddy/overlay` に置き、`server.py` の `Path(__file__).parent / "overlay"` のまま見つけられるようにした。PortAudio の DLL は `_sounddevice_data/portaudio-binaries` に入る
   - 音声認識のスパイクの依存と、テスト・型チェックの依存（pytest・mypy）は含めない
-  - onedir と onefile の両方でビルドでき、`--version` で `0.1.0` が出ることを確認した。`--list-devices`・`--demo`・OBS での表示・Defender のスキャンは未確認（人間が `docs/build.md` の手順で行う）
-  - `docs/adr/0004-exe-packaging.md` はひな形（状態：提案中）
+  - onedir と onefile の両方でビルドでき、`--version` で `0.1.0` が出ることを確認した
+  - 人間が `docs/build.md` の手順で確認した。どちらもリポジトリの外で `--list-devices`・`--demo` での OBS の表示・口パクが動き、Defender の手動スキャンの後もブロックされずに起動できた
+  - onedir を採用し、フォルダを zip にして配布する（ADR 0004、状態：採用）。`scripts/build_exe.py` の既定のモードを onedir にした
+  - 課題（ADR 0004）：ダウンロードしたファイル（Mark of the Web 付き）での SmartScreen と Defender の確認は Phase 4。使わない PortAudio の DLL（約 2 MB）が含まれる。依存を追加したときは exe に入るものを確認する
 
 ## まだないもの
 
@@ -87,5 +89,4 @@ Phase 0（設計と守りの準備）は完了。
 
 ## 次にやること
 
-- T-07 の確認（人間、`docs/build.md` の手順）と、ADR 0004 での onedir / onefile の決定
 - キーワード検知の本体への組み込み（既定のキーワードとおとりの変更、`config.py`・`config.example.toml`・`requirements.md` の FR-07 の修正を含む）

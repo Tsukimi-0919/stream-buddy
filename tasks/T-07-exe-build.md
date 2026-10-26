@@ -97,12 +97,12 @@ stream-buddy を PyInstaller で exe にし、**Python を入れていない PC 
 
 ## 完了条件
 
-- [ ] `uv sync --locked`（`build` グループなし）が通り、本体の依存が増えていない
-- [ ] `uv run ruff check .` / `uv run ruff format --check .` / `uv run mypy src` / `uv run pytest` が通る
-- [ ] onedir と onefile の両方でビルドでき、どちらも `stream-buddy.exe --version` で `0.1.0` が出る
-- [ ] ビルド後にサイズと SHA-256 が表示される
-- [ ] `dist/` と `build/` が `git status` に出てこない
-- [ ] `docs/build.md` の手順で、人間が確認を始められる
-- [ ] `git status` に「変更してよいファイル」以外の変更がない
-- [ ] `feat/exe-build` ブランチでコミットした（push はしない）
-- [ ] CLAUDE.md の形式で報告した
+- [x] `uv sync --locked`（`build` グループなし）が通り、本体の依存が増えていない
+- [x] `uv run ruff check .` / `uv run ruff format --check .` / `uv run mypy src` / `uv run pytest` が通る
+- [x] onedir と onefile の両方でビルドでき、どちらも `stream-buddy.exe --version` で `0.1.0` が出る
+- [x] ビルド後にサイズと SHA-256 が表示される
+- [x] `dist/` と `build/` が `git status` に出てこない
+- [x] `docs/build.md` の手順で、人間が確認を始められる
+- [x] `git status` に「変更してよいファイル」以外の変更がない
+- [x] `feat/exe-build` ブランチでコミットした（push はしない）
+- [x] CLAUDE.md の形式で報告した
