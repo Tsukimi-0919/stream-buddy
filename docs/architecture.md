@@ -34,6 +34,20 @@ Python バックエンドがすべての判断を行い、OBS のページは「
 | `log` | 配信ログの Markdown 出力 | Markdown ファイル | FR-10, SR-06 |
 | `overlay/`（HTML/CSS/JS） | メンダコ表示、吹き出し、演出 | なし（表示のみ） | FR-03, FR-09, SR-04 |
 
+### `state` の中身
+
+状態遷移の仕様は [state-machine.md](state-machine.md)。どのファイルも音声・ネットワーク・実時間を扱わず、時刻はミリ秒の引数で受け取る。
+
+| ファイル | 中身 |
+| --- | --- |
+| `state/events.py` | 入力（`SpeechStarted`・`SpeechEnded`・`Keyword`・`Hotkey`・`Tick`）と出力（`Mouth`・`TensionChanged`・`Say`・`Effect`・`TensionPeak`）の型 |
+| `state/constants.py` | state-machine.md の数値（窓、しきい値、待ち時間、吹き出しの最短間隔など） |
+| `state/tension.py` | テンションの状態機械（ST-01〜ST-04） |
+| `state/silence.py` | 沈黙ハンター（ST-11〜ST-15） |
+| `state/event_fsm.py` | イベントの状態機械（ST-21〜ST-25） |
+| `state/arbiter.py` | 出口：`Say` の優先順位と最短間隔 |
+| `state/brain.py` | 4 つをまとめる `Brain`。入力を各状態機械に配り、出力を出口に通して返す。状態機械どうしをつなぐのはここだけ |
+
 ## 依存の向き
 
 - `state` は入力（`detect`・`hotkey`）からイベントを受け取り、`server` と `log` に指示を出す

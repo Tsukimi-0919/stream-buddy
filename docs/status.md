@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 1：実装中（T-07 の exe 化の試作完了。onedir を採用）**
+**Phase 2：実装中（T-08 の状態機械を実装。セリフ・入力・組み立ては未実装）**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -78,9 +78,17 @@ Phase 0（設計と守りの準備）は完了。
   - onedir を採用し、フォルダを zip にして配布する（ADR 0004、状態：採用）。`scripts/build_exe.py` の既定のモードを onedir にした
   - 課題（ADR 0004）：ダウンロードしたファイル（Mark of the Web 付き）での SmartScreen と Defender の確認は Phase 4。使わない PortAudio の DLL（約 2 MB）が含まれる。依存を追加したときは exe に入るものを確認する
 
+- T-08：状態機械（`src/stream_buddy/state/`。docs/state-machine.md の v1 に従う）
+  - テンション（ST-01〜ST-04）、沈黙ハンター（ST-11〜ST-15）、イベント（ST-21〜ST-25）、出口（Arbiter）と、4 つをまとめる `Brain`
+  - 各状態機械は `step(入力, now_ms)` を持つクラス。時刻は引数で受け取り、`time`・`random`・`asyncio`・`sounddevice`・`fastapi` を import しない（テストで検査）
+  - 数値は `state/constants.py` に集めた。沈黙の秒数だけは `Brain` の引数で渡す（設定の `silence.seconds` を渡す想定）
+  - `tests/state/` に遷移の ID ごとのテスト、境界のテスト、`Brain` を通したシナリオテスト。state-machine.md のすべての `ST-xx` がテスト名に出ることもテストで確かめる
+  - まだどこからも使っていない（サーバー・音声・`--demo` との組み立ては T-12）
+
 ## まだないもの
 
-- 機能モジュール（hotkey / state / log）
+- 機能モジュール（hotkey / log）。セリフの選択（T-09）
+- 状態機械とサーバー・音声の組み立て（T-12）
 - キーワード検知の本体への組み込み（エンジンは Vosk に決定済み）
 - CPU 使用率の計測（NFR-01）
 - 死亡・クリアの演出（Phase 3）
@@ -89,4 +97,7 @@ Phase 0（設計と守りの準備）は完了。
 
 ## 次にやること
 
-- キーワード検知の本体への組み込み（既定のキーワードとおとりの変更、`config.py`・`config.example.toml`・`requirements.md` の FR-07 の修正を含む）
+- T-09：セリフファイルの読み込みと検証、既定のセリフ集
+- T-10：キーワード検知の本体への組み込み（既定のキーワードとおとりの変更、`config.py`・`config.example.toml`・`requirements.md` の FR-07 の修正を含む）
+- T-11：ホットキー（`RegisterHotKey`）
+- T-12：組み立て（入力 → 状態機械 → WebSocket。`--demo` を状態機械経由に置き換え）
