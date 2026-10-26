@@ -135,13 +135,14 @@ def _start(args: argparse.Namespace, config: Config) -> int:
                 file=sys.stderr,
             )
 
-        # マイクを選ぶ (見つからなければ起動しない)。音を取り始めるのはサーバーの起動後
+        # 6. マイクを選び、ストリームを用意する (見つからなければ起動しない)。
+        # URL を表示する前に知らせるため、ここで行う。音を取り始めるのはサーバーの起動後
         microphone = _open_microphone(config)
         if microphone is None:
             return 2
 
-        # 6. サーバーを起動し、OBS の URL を表示する
-        # (7. マイクと認識用のスレッド、8. 時計とキューの処理は、
+        # 7. サーバーを起動し、OBS の URL を表示する
+        # (8. マイクと認識用のスレッド、9. 時計とキューの処理は、
         #  サーバーの起動後に Runtime が始める)
         _print_url(args, config, token, created=created)
         runtime = app.Runtime(engine, config, microphone=microphone, keywords=setup)
