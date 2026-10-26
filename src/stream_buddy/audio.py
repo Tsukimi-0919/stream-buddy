@@ -1,12 +1,15 @@
-"""マイクから音量 (dBFS) だけを取り出す。
+"""マイクから音量 (dBFS) を取り出し、キーワード検知用に音声のブロックを渡す。
 
 プライバシーのため、次を守る。
-- 音声のサンプルはコールバックの中で音量にしたら捨てる。リストやキューにためない
+- 音量の計算に使ったサンプルは、コールバックの中で捨てる
+- キーワード検知には、上限つきのキュー (BlockQueue、最大 1 秒分) でだけ音声を渡す。
+  いっぱいなら捨て、ためない
 - 音声をファイルに残さない。外に送らない
 sounddevice を直接呼ぶのは SoundDeviceBackend だけにし、テストでは偽物に差し替える。
 """
 
 import math
+import queue
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -18,9 +21,12 @@ SAMPLE_RATE = 16_000
 BLOCK_SIZE = 480  # 約 30 ms
 BLOCK_SECONDS = BLOCK_SIZE / SAMPLE_RATE
 SILENCE_DBFS = -100.0
+# キーワード検知に渡すキューの上限 (1 秒分を超えない)
+MAX_QUEUE_BLOCKS = int(1.0 / BLOCK_SECONDS)
 
 type Samples = NDArray[np.float32]
 type LevelCallback = Callable[[float], None]
+type SampleSink = Callable[[Samples], object]
 
 
 class AudioError(Exception):
@@ -86,19 +92,67 @@ def _display_name(device: InputDevice) -> str:
     return " ".join(device.name.split())
 
 
+class BlockQueue:
+    """コールバックから認識用のスレッドへ音声のブロックを渡す、上限つきのキュー。
+
+    いっぱいなら新しいブロックを捨てる (ためない)。取り出した側は、すぐに使って手元に残さない。
+    """
+
+    def __init__(self, max_blocks: int = MAX_QUEUE_BLOCKS) -> None:
+        self._queue: queue.Queue[Samples] = queue.Queue(maxsize=max_blocks)
+        self.dropped = 0
+
+    def offer(self, samples: Samples) -> bool:
+        """ブロックの複製を入れる。いっぱいなら捨てて False。"""
+        # コールバックの配列は使い回されるので、複製を渡す
+        try:
+            self._queue.put_nowait(np.array(samples, dtype=np.float32, copy=True).reshape(-1))
+        except queue.Full:
+            self.dropped += 1
+            return False
+        return True
+
+    def take(self, timeout: float) -> Samples | None:
+        try:
+            return self._queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def size(self) -> int:
+        return self._queue.qsize()
+
+    def clear(self) -> None:
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                return
+
+
 class Microphone:
-    """マイクを開き、ブロックごとの音量だけを on_level に渡す。"""
+    """マイクを開き、ブロックごとの音量を on_level に渡す。
+
+    set_sample_sink で受け取り手 (BlockQueue.offer) を決めたときだけ、音声のブロックも渡す。
+    """
 
     def __init__(self, backend: AudioBackend, device: int | None) -> None:
         self._on_level: LevelCallback | None = None
+        self._sample_sink: SampleSink | None = None
         self._closed = False
         self._stream = backend.create_stream(device, self._on_block)
 
     def _on_block(self, samples: Samples) -> None:
-        # 音声のサンプルはここで音量にして、どこにも残さない
+        mono = samples[:, 0] if samples.ndim == 2 else samples
         on_level = self._on_level
         if on_level is not None:
-            on_level(block_dbfs(samples[:, 0] if samples.ndim == 2 else samples))
+            on_level(block_dbfs(mono))
+        sink = self._sample_sink
+        if sink is not None:
+            sink(mono)
+
+    def set_sample_sink(self, sink: SampleSink | None) -> None:
+        """キーワード検知に音声のブロックを渡す先。None なら渡さない。"""
+        self._sample_sink = sink
 
     def start(self, on_level: LevelCallback) -> None:
         self._on_level = on_level
@@ -110,6 +164,7 @@ class Microphone:
             return
         self._closed = True
         self._on_level = None
+        self._sample_sink = None
         try:
             self._stream.stop()
         finally:

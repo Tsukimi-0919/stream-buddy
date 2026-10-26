@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "sounddevice>=0.5.6",
     "uvicorn>=0.54.0",
+    "vosk>=0.3.45",
     "websockets>=17.3",
 ]
 
@@ -34,7 +35,6 @@ dev = [
 ]
 spike-asr = [
     "faster-whisper>=1.2.1",
-    "vosk>=0.3.45",
 ]
 
 [tool.ruff]

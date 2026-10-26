@@ -42,10 +42,12 @@ DATA_DEST = "stream_buddy/data"
 # sounddevice は _sounddevice_data/portaudio-binaries/ から DLL を読み込む
 PORTAUDIO_DEST = "_sounddevice_data/portaudio-binaries"
 PORTAUDIO_DLL = "libportaudio64bit.dll"
+# vosk は vosk/ の DLL (libvosk.dll など) を自分のフォルダから読み込むので、そこに置く。
+# 音声認識モデルは同梱しない (利用者が公式サイトから取得し、起動時にハッシュで確かめる)
+VOSK_PACKAGE = "vosk"
 # 入っていても exe に含めない (音声認識のスパイクと、テスト・型チェックの依存)。
 # dev グループの mypy は、pydantic の mypy プラグイン経由で集められてしまうため明示する
 EXCLUDED_MODULES = [
-    "vosk",
     "faster_whisper",
     "ctranslate2",
     "onnxruntime",
@@ -125,6 +127,8 @@ def pyinstaller_args(mode: str) -> list[str]:
         f"{DATA_DIR}{_DATA_SEP}{DATA_DEST}",
         "--add-binary",
         f"{portaudio_dll()}{_DATA_SEP}{PORTAUDIO_DEST}",
+        "--collect-binaries",
+        VOSK_PACKAGE,
     ]
     for module in EXCLUDED_MODULES:
         args += ["--exclude-module", module]

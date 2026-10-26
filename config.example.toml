@@ -18,8 +18,13 @@ death = "F9"                 # F1〜F12 のみ
 clear = "F10"                # F1〜F12 のみ。death と同じキーは不可
 
 [keywords]
+enabled = true               # false にすると音声認識（Vosk）を使わない
+model_dir = ""               # 空文字なら <exe のフォルダ>/models/vosk-model-small-ja-0.22。指定するなら絶対パスのみ
 death = ["死んだ", "やられた"]  # 各 1〜20 文字、最大 20 個
-clear = ["勝った", "クリア"]    # 同上
+clear = ["クリア", "やったー"]  # 同上
+decoys = ["やっぱり", "クリーム", "しんどい", "かったるい"]
+                             # おとりの言葉（0〜20 個、各 1〜20 文字）。キーワードに似た音の言葉を入れると、
+                             # それと認識されたときは検知しない。キーワードと同じ言葉は不可
 
 [display]
 background = "transparent"   # "transparent" または "chroma"

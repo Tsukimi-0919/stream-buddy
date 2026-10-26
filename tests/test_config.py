@@ -36,8 +36,11 @@ def test_defaults() -> None:
     assert config.silence.seconds == 20
     assert config.hotkeys.death == "F9"
     assert config.hotkeys.clear == "F10"
+    assert config.keywords.enabled is True
+    assert config.keywords.model_dir == ""
     assert config.keywords.death == ("死んだ", "やられた")
-    assert config.keywords.clear == ("勝った", "クリア")
+    assert config.keywords.clear == ("クリア", "やったー")
+    assert config.keywords.decoys == ("やっぱり", "クリーム", "しんどい", "かったるい")
     assert config.display.background == "transparent"
     assert config.log.enabled is False
     assert config.log.output_dir == ""

@@ -75,3 +75,15 @@ def fake_audio(monkeypatch: pytest.MonkeyPatch) -> FakeBackend:
     backend = FakeBackend()
     monkeypatch.setattr(audio, "default_backend", lambda: backend)
     return backend
+
+
+@pytest.fixture(autouse=True)
+def no_real_model(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """すべてのテストで本物の音声認識モデルを使わないよう、既定のモデルの場所をない場所にする。"""
+    from stream_buddy import keywords
+
+    missing = tmp_path_factory.mktemp("no-model") / "models" / keywords.MODEL_NAME
+    monkeypatch.setattr(keywords, "default_model_dir", lambda: missing)
+    return missing
