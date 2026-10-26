@@ -92,13 +92,21 @@ def test_main_config_error_exits_2(
 
 @pytest.mark.parametrize(("argv", "expected"), [([], False), (["--demo"], True)])
 def test_main_demo_option(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, argv: list[str], expected: bool
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+    expected: bool,
 ) -> None:
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(server, "serve", lambda config, token, **kw: calls.append(kw))
     monkeypatch.chdir(tmp_path)
     assert main(argv) == 0
-    assert [kw["demo"] for kw in calls] == [expected]
+    # どちらも状態機械 (Runtime) を通し、hello には今の状態を返す
+    assert len(calls) == 1
+    assert callable(calls[0]["running"])
+    assert callable(calls[0]["state_messages"])
+    assert ("デモモードで起動します。" in capsys.readouterr().out) is expected
 
 
 # HTTP

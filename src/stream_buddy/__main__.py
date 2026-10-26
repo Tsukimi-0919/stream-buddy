@@ -7,9 +7,9 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from stream_buddy import __version__, audio, hotkey, keywords, server
+from stream_buddy import __version__, app, audio, hotkey, keywords, lines, server
 from stream_buddy.config import Config, ConfigError, load_config
-from stream_buddy.state.events import EventKind
+from stream_buddy.state.events import EventKind, Hotkey
 from stream_buddy.token_store import TokenStoreError, default_token_dir, load_or_create_token
 
 
@@ -75,11 +75,41 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.test_hotkeys:
         return _test_hotkeys(config)
 
-    # デモのときはマイクも音声認識もホットキーも使わない
-    # (ホットキーを Brain につなぐのは T-12。それまでは --test-hotkeys のときだけ登録する)
-    if args.demo:
-        return _run(args, config, None)
+    if args.test_keywords:
+        return _run_test_keywords(config)
 
+    return _start(args, config)
+
+
+def _start(args: argparse.Namespace, config: Config) -> int:
+    """起動する (docs/architecture.md の「起動の流れ」)。終了は逆の順番で行う。"""
+    # 2. セリフ集を読み、検証する
+    try:
+        book = lines.load_lines(config.lines.file)
+    except ConfigError as e:
+        print(e, file=sys.stderr)
+        return 2
+
+    # 3. トークンを読む (なければ作る)
+    try:
+        token, created = load_or_create_token(default_token_dir(), reset=args.reset_token)
+    except TokenStoreError as e:
+        print(e, file=sys.stderr)
+        return 2
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    engine = app.Engine(config, book)
+
+    # デモのときはマイクも音声認識もホットキーも使わず、偽の入力を Brain に入れる
+    if args.demo:
+        _print_url(args, config, token, created=created)
+        print("デモモードで起動します。", flush=True)
+        runtime = app.Runtime(engine, config, demo=True)
+        server.serve(config, token, running=runtime.run, state_messages=engine.state_messages)
+        print("終了しました。")
+        return 0
+
+    # 4. モデルを確認して読み込む (ほかのスレッドが動き出す前。docs/architecture.md の既知の制約)
     try:
         setup = keywords.prepare_keywords(config.keywords)
     except ConfigError as e:
@@ -87,23 +117,81 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if setup is None and config.keywords.enabled:
         print(keywords.MISSING_MODEL_MESSAGE)
-    if args.test_keywords and setup is None:
-        print("キーワード検知が無効なため、--test-keywords は使えません。", file=sys.stderr)
-        return 2
 
+    listener: hotkey.HotkeyListener | None = None
+    microphone: audio.Microphone | None = None
+    try:
+        # 5. ホットキーを登録する。1 つも登録できなくても起動は続ける
+        listener = hotkey.HotkeyListener(
+            config.hotkeys,
+            # ホットキーのスレッドから呼ばれる。渡すのはキーの種類だけ
+            lambda kind: engine.submit_threadsafe(Hotkey(kind)),
+        )
+        for failure in listener.start():
+            print(failure.message(), file=sys.stderr)
+        if not listener.registered:
+            print(
+                "ホットキーを 1 つも登録できなかったため、ホットキーなしで起動します。",
+                file=sys.stderr,
+            )
+
+        # マイクを選ぶ (見つからなければ起動しない)。音を取り始めるのはサーバーの起動後
+        microphone = _open_microphone(config)
+        if microphone is None:
+            return 2
+
+        # 6. サーバーを起動し、OBS の URL を表示する
+        # (7. マイクと認識用のスレッド、8. 時計とキューの処理は、
+        #  サーバーの起動後に Runtime が始める)
+        _print_url(args, config, token, created=created)
+        runtime = app.Runtime(engine, config, microphone=microphone, keywords=setup)
+        server.serve(config, token, running=runtime.run, state_messages=engine.state_messages)
+        print("終了しました。")
+        return 0
+    finally:
+        # Ctrl+C や例外で終わっても、マイクを閉じ、ホットキーの登録を外す
+        if microphone is not None:
+            microphone.close()
+        if listener is not None:
+            listener.stop()
+
+
+def _open_microphone(config: Config) -> audio.Microphone | None:
     try:
         backend = audio.default_backend()
         device = audio.select_device(config.audio.device, backend.input_devices())
-        microphone = audio.Microphone(backend, device)
+        return audio.Microphone(backend, device)
     except audio.AudioError as e:
         print(e, file=sys.stderr)
-        return 2
+        return None
 
+
+def _print_url(args: argparse.Namespace, config: Config, token: str, *, created: bool) -> None:
+    if args.reset_token:
+        print("トークンを作り直しました。OBS の URL を設定し直してください。")
+    elif created:
+        print("新しいトークンを作りました。OBS の URL を設定してください。")
+    print("OBS のブラウザソースに次の URL を設定してください:")
+    print(server.overlay_url(config.server.port, token))
+    print("この URL を配信画面に映さないでください。", flush=True)
+
+
+def _run_test_keywords(config: Config) -> int:
     try:
-        if args.test_keywords and setup is not None:
-            return _test_keywords(microphone, setup)
-        # キーワード検知を Brain につなぐのは T-12。ここではモデルの確認と準備までを行う
-        return _run(args, config, microphone)
+        setup = keywords.prepare_keywords(config.keywords)
+    except ConfigError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if setup is None:
+        if config.keywords.enabled:
+            print(keywords.MISSING_MODEL_MESSAGE)
+        print("キーワード検知が無効なため、--test-keywords は使えません。", file=sys.stderr)
+        return 2
+    microphone = _open_microphone(config)
+    if microphone is None:
+        return 2
+    try:
+        return _test_keywords(microphone, setup)
     finally:
         # Ctrl+C やエラーで終わっても、ストリームを確実に閉じる
         microphone.close()
@@ -186,27 +274,6 @@ def _test_hotkeys(config: Config) -> int:
         print("終了しました。")
         return 0
     return 0 if ok else 2
-
-
-def _run(args: argparse.Namespace, config: Config, microphone: audio.Microphone | None) -> int:
-    try:
-        token, created = load_or_create_token(default_token_dir(), reset=args.reset_token)
-    except TokenStoreError as e:
-        print(e, file=sys.stderr)
-        return 2
-
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    if args.reset_token:
-        print("トークンを作り直しました。OBS の URL を設定し直してください。")
-    elif created:
-        print("新しいトークンを作りました。OBS の URL を設定してください。")
-    print("OBS のブラウザソースに次の URL を設定してください:")
-    print(server.overlay_url(config.server.port, token))
-    print("この URL を配信画面に映さないでください。", flush=True)
-    if args.demo:
-        print("デモモードで起動します。")
-    server.serve(config, token, demo=args.demo, microphone=microphone)
-    return 0
 
 
 if __name__ == "__main__":

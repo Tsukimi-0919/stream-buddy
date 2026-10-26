@@ -9,12 +9,12 @@
 - すべての HTTP 応答に CSP などのヘッダーを付ける (SR-04)
 """
 
-import asyncio
 import contextlib
 import logging
 import mimetypes
 import secrets
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import AbstractAsyncContextManager
 from pathlib import Path
 
 import uvicorn
@@ -25,10 +25,7 @@ from pydantic import ValidationError
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from stream_buddy import demo as demo_mode
-from stream_buddy.audio import BLOCK_SECONDS, Microphone
 from stream_buddy.config import Config
-from stream_buddy.detect import SpeechDetector
 from stream_buddy.protocol import (
     MAX_MESSAGE_BYTES,
     SERVER_MESSAGE_TYPES,
@@ -36,8 +33,6 @@ from stream_buddy.protocol import (
     DisplayPayload,
     Hello,
     ServerMessage,
-    Speech,
-    SpeechPayload,
 )
 
 HOST = "127.0.0.1"
@@ -133,40 +128,13 @@ class _GuardMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
-async def _cancel(task: asyncio.Task[None]) -> None:
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
-
-
-async def _relay_speech(
-    microphone: Microphone, threshold_db: float, hub: Hub, stack: contextlib.AsyncExitStack
-) -> None:
-    """マイクの音量から発話を判定し、変化したときだけ speech を送る。"""
-    loop = asyncio.get_running_loop()
-    detector = SpeechDetector(threshold_db, BLOCK_SECONDS)
-    changes: asyncio.Queue[bool] = asyncio.Queue()
-
-    def on_level_in_loop(level_db: float) -> None:
-        changed = detector.update(level_db)
-        if changed is not None:
-            changes.put_nowait(changed)
-
-    def on_level(level_db: float) -> None:
-        # 音声のスレッドから呼ばれる。渡すのは音量の数値だけ
-        with contextlib.suppress(RuntimeError):  # 終了処理中でループが閉じている
-            loop.call_soon_threadsafe(on_level_in_loop, level_db)
-
-    async def send_changes() -> None:
-        # 1 本のタスクで順番どおりに送る
-        while True:
-            speaking = await changes.get()
-            await hub.broadcast(Speech(payload=SpeechPayload(speaking=speaking)))
-
-    stack.push_async_callback(_cancel, asyncio.create_task(send_changes()))
-    # 閉じるのはタスクを止めるより先 (コールバックは後入れ先出しで呼ばれる)
-    stack.callback(microphone.close)
-    microphone.start(on_level)
+# サーバーが動いている間に動かすもの (入力・状態機械など。app.Runtime.run)。
+# 受け取った broadcast でページにメッセージを送る
+type Running = Callable[
+    [Callable[[ServerMessage], Awaitable[None]]], AbstractAsyncContextManager[None]
+]
+# hello への返信で、display に続けて送る今の状態 (テンションなど)
+type StateMessages = Callable[[], Sequence[ServerMessage]]
 
 
 def create_app(
@@ -174,27 +142,27 @@ def create_app(
     token: str,
     hub: Hub | None = None,
     *,
-    demo: bool = False,
-    microphone: Microphone | None = None,
+    running: Running | None = None,
+    state_messages: StateMessages | None = None,
 ) -> FastAPI:
     port = config.server.port
     expected_origin = f"http://{HOST}:{port}"
     hub = hub if hub is not None else Hub()
-    # hello への返信。接続したページに現在の背景を知らせる
-    initial_display = Display(payload=DisplayPayload(background=config.display.background))
+    display = Display(payload=DisplayPayload(background=config.display.background))
+
+    def hello_reply() -> list[ServerMessage]:
+        # 接続したページに、背景と今の状態を知らせる (再接続しても今の状態から始められる)
+        return [display, *(state_messages() if state_messages is not None else [])]
 
     def token_ok(given: str) -> bool:
         return secrets.compare_digest(given.encode(), token.encode())
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        async with contextlib.AsyncExitStack() as stack:
-            if demo:
-                stack.push_async_callback(
-                    _cancel, asyncio.create_task(demo_mode.run_demo(hub.broadcast))
-                )
-            if microphone is not None:
-                await _relay_speech(microphone, config.audio.speech_threshold_db, hub, stack)
+        if running is None:
+            yield
+            return
+        async with running(hub.broadcast):
             yield
 
     app = FastAPI(
@@ -234,14 +202,16 @@ def create_app(
             return
         try:
             await websocket.accept()
-            await _receive_loop(websocket, initial_display)
+            await _receive_loop(websocket, hello_reply)
         finally:
             hub.remove(websocket)
 
     return app
 
 
-async def _receive_loop(websocket: WebSocket, hello_reply: ServerMessage) -> None:
+async def _receive_loop(
+    websocket: WebSocket, hello_reply: Callable[[], Sequence[ServerMessage]]
+) -> None:
     while True:
         message = await websocket.receive()
         if message["type"] == "websocket.disconnect":
@@ -263,15 +233,20 @@ async def _receive_loop(websocket: WebSocket, hello_reply: ServerMessage) -> Non
             logger.warning("形の合わないメッセージを破棄しました: %s", reasons)
             continue
         logger.info("ページから hello を受信しました")
-        await websocket.send_text(hello_reply.model_dump_json())
+        for reply in hello_reply():
+            await websocket.send_text(reply.model_dump_json())
 
 
 def serve(
-    config: Config, token: str, *, demo: bool = False, microphone: Microphone | None = None
+    config: Config,
+    token: str,
+    *,
+    running: Running | None = None,
+    state_messages: StateMessages | None = None,
 ) -> None:
     """サーバーを起動する。待ち受けアドレスは常に HOST (SR-01)。"""
     uvicorn.run(
-        create_app(config, token, demo=demo, microphone=microphone),
+        create_app(config, token, running=running, state_messages=state_messages),
         host=HOST,
         port=config.server.port,
         ws="websockets-sansio",

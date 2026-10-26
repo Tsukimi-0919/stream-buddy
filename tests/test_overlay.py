@@ -6,9 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from stream_buddy import demo, server
+from stream_buddy import server
 from stream_buddy.config import Config
-from stream_buddy.protocol import SERVER_MESSAGE_TYPES
 
 PORT = 8765
 TOKEN = "test-token-0123456789"  # noqa: S105
@@ -150,59 +149,6 @@ def test_static_files(client: TestClient, path: str, content_type: str) -> None:
 
 
 # デモモード
-
-
-def test_demo_steps_are_valid_protocol_messages() -> None:
-    for message in demo.DEMO_STEPS:
-        assert isinstance(message, SERVER_MESSAGE_TYPES)
-        # JSON にしてから読み直しても同じになる (モデルとして正しい)
-        assert type(message).model_validate_json(message.model_dump_json()) == message
-
-
-def test_demo_steps_follow_the_spec() -> None:
-    steps = [(m.type, m.payload.model_dump()) for m in demo.DEMO_STEPS]
-    texts = [p["text"] for t, p in steps if t == "say"]
-    assert texts == ["ふむふむ、いい感じだね～", "うおおお！"]
-    assert [(t, p) for t, p in steps if t != "say"] == [
-        ("tension", {"level": "calm"}),
-        ("speech", {"speaking": True}),
-        ("speech", {"speaking": False}),
-        ("tension", {"level": "normal"}),
-        ("tension", {"level": "high"}),
-        ("speech", {"speaking": True}),
-        ("speech", {"speaking": False}),
-    ]
-    assert [t for t, _ in steps] == [
-        "tension",
-        "speech",
-        "speech",
-        "tension",
-        "say",
-        "tension",
-        "speech",
-        "say",
-        "speech",
-    ]
-
-
-def test_demo_interval_is_2_to_3_seconds() -> None:
-    assert 2 <= demo.DEMO_INTERVAL_SECONDS <= 3
-
-
-def test_demo_mode_broadcasts_steps_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(demo, "DEMO_INTERVAL_SECONDS", 0.01)
-    app = server.create_app(Config(), TOKEN, demo=True)
-    with (
-        TestClient(app, base_url=BASE) as c,
-        c.websocket_connect(f"{WS}/ws?token={TOKEN}", headers=ORIGIN) as ws,
-    ):
-        received = [ws.receive_json() for _ in range(len(demo.DEMO_STEPS) * 2)]
-    expected = [m.model_dump(mode="json") for m in demo.DEMO_STEPS]
-    # 接続した時点から流れが始まるとは限らないので、2周分の中に1周が順番どおりあることを確かめる
-    assert any(
-        received[i : i + len(expected)] == expected
-        for i in range(len(received) - len(expected) + 1)
-    )
 
 
 def test_no_demo_without_option(client: TestClient) -> None:
