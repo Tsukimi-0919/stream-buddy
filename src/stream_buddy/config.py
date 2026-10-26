@@ -22,12 +22,19 @@ HotkeyName = Literal["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"
 Background = Literal["transparent", "chroma"]
 
 # 指定値をエラーメッセージに含めない項目 (個人的な情報を含みうるため)
-_HIDDEN_VALUE_LOCS = {("log", "output_dir")}
+_HIDDEN_VALUE_LOCS = {("log", "output_dir"), ("lines", "file")}
 _MAX_SHOWN_VALUE_LEN = 40
+# メモ帳などが先頭に付けることがある、UTF-8 の BOM
+UTF8_BOM = b"\xef\xbb\xbf"
 
 
 class ConfigError(Exception):
     """設定ファイルが読めない、または内容が正しくないときの例外。"""
+
+
+def decode_utf8(data: bytes) -> str:
+    """UTF-8 の文字列にする。先頭の BOM だけを取り除く (それ以外の位置の U+FEFF は残す)。"""
+    return data.removeprefix(UTF8_BOM).decode("utf-8")
 
 
 def _in_range[T: (int, float)](low: T, high: T) -> Callable[[T], T]:
@@ -99,6 +106,17 @@ class LogConfig(_Section):
         return self
 
 
+def _check_lines_file(value: str) -> str:
+    # 空文字は既定のセリフ集。指定するときは、どの OS で検証しても Windows の絶対パスとして判定する
+    if value and not PureWindowsPath(value).is_absolute():
+        raise ValueError("絶対パスで指定してください（空文字なら既定のセリフ集）")
+    return value
+
+
+class LinesConfig(_Section):
+    file: Annotated[str, AfterValidator(_check_lines_file)] = ""
+
+
 class Config(_Section):
     server: ServerConfig = ServerConfig()
     audio: AudioConfig = AudioConfig()
@@ -107,6 +125,7 @@ class Config(_Section):
     keywords: KeywordsConfig = KeywordsConfig()
     display: DisplayConfig = DisplayConfig()
     log: LogConfig = LogConfig()
+    lines: LinesConfig = LinesConfig()
 
 
 def load_config(path: Path | None) -> Config:
@@ -114,8 +133,7 @@ def load_config(path: Path | None) -> Config:
     if path is None or not path.exists():
         return Config()
     try:
-        with path.open("rb") as f:
-            data = tomllib.load(f)
+        data = tomllib.loads(decode_utf8(path.read_bytes()))
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"設定ファイルが TOML として正しくありません: {e}") from None
     except UnicodeDecodeError:

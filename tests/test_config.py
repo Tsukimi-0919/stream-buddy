@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from stream_buddy.config import Config, ConfigError, load_config
+from stream_buddy.config import UTF8_BOM, Config, ConfigError, load_config
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 
@@ -42,6 +42,7 @@ def test_defaults() -> None:
     assert config.log.enabled is False
     assert config.log.output_dir == ""
     assert config.log.include_speech_text is False
+    assert config.lines.file == ""
 
 
 def test_example_file_matches_defaults() -> None:
@@ -157,6 +158,23 @@ def test_log_disabled_allows_empty_output_dir(tmp_path: Path) -> None:
     assert config.log.output_dir == ""
 
 
+def test_lines_file_absolute_path(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path, "[lines]\nfile = 'C:\\stream\\my-lines.toml'\n"))
+    assert config.lines.file == "C:\\stream\\my-lines.toml"
+
+
+@pytest.mark.parametrize("file", ["lines.toml", "data\\lines.toml", "C:lines.toml", "\\lines.toml"])
+def test_lines_file_relative_path_is_error(tmp_path: Path, file: str) -> None:
+    message = load_error(tmp_path, f"[lines]\nfile = '{file}'\n")
+    assert "[lines] file は 絶対パスで指定してください" in message
+    # パスには個人のフォルダ名が入りうるので、指定値は出さない
+    assert "指定値" not in message
+
+
+def test_lines_unknown_key(tmp_path: Path) -> None:
+    assert "[lines] path は知らない項目です" in load_error(tmp_path, "[lines]\npath = ''\n")
+
+
 def test_broken_toml(tmp_path: Path) -> None:
     message = load_error(tmp_path, "[server\nport = 8765\n")
     assert "TOML として正しくありません" in message
@@ -166,6 +184,25 @@ def test_not_utf8(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_bytes('[audio]\ndevice = "マイク"\n'.encode("cp932"))
     with pytest.raises(ConfigError):
+        load_config(path)
+
+
+def test_utf8_with_bom(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_bytes(UTF8_BOM + '[audio]\ndevice = "マイク"\n'.encode())
+    assert load_config(path).audio.device == "マイク"
+    path.write_bytes(UTF8_BOM + EXAMPLE.read_bytes())
+    assert load_config(path) == Config()
+
+
+def test_bom_is_removed_only_at_the_start(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    # 文字列の中の U+FEFF は取り除かずに残す
+    path.write_bytes(UTF8_BOM + '[audio]\ndevice = "\ufeffマイク"\n'.encode())
+    assert load_config(path).audio.device == "\ufeffマイク"
+    # 2 つ目の BOM は TOML の一部として扱われ、エラーになる
+    path.write_bytes(UTF8_BOM * 2 + b"[server]\nport = 8765\n")
+    with pytest.raises(ConfigError, match="TOML として正しくありません"):
         load_config(path)
 
 
