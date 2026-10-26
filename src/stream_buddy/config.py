@@ -22,7 +22,7 @@ HotkeyName = Literal["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"
 Background = Literal["transparent", "chroma"]
 
 # 指定値をエラーメッセージに含めない項目 (個人的な情報を含みうるため)
-_HIDDEN_VALUE_LOCS = {("log", "output_dir")}
+_HIDDEN_VALUE_LOCS = {("log", "output_dir"), ("lines", "file")}
 _MAX_SHOWN_VALUE_LEN = 40
 
 
@@ -99,6 +99,17 @@ class LogConfig(_Section):
         return self
 
 
+def _check_lines_file(value: str) -> str:
+    # 空文字は既定のセリフ集。指定するときは、どの OS で検証しても Windows の絶対パスとして判定する
+    if value and not PureWindowsPath(value).is_absolute():
+        raise ValueError("絶対パスで指定してください（空文字なら既定のセリフ集）")
+    return value
+
+
+class LinesConfig(_Section):
+    file: Annotated[str, AfterValidator(_check_lines_file)] = ""
+
+
 class Config(_Section):
     server: ServerConfig = ServerConfig()
     audio: AudioConfig = AudioConfig()
@@ -107,6 +118,7 @@ class Config(_Section):
     keywords: KeywordsConfig = KeywordsConfig()
     display: DisplayConfig = DisplayConfig()
     log: LogConfig = LogConfig()
+    lines: LinesConfig = LinesConfig()
 
 
 def load_config(path: Path | None) -> Config:

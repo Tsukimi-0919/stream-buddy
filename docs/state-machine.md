@@ -197,7 +197,13 @@ stateDiagram-v2
 ### セリフの選び方
 
 - セリフは場面ごと・テンションごとに **TOML ファイル**で持つ（コードを触らずに差し替えられる：NFR-04）
-- 例：`[silence.calm]`、`[silence.high]`、`[death]`、`[clear]`、`[high]`
+- ファイルの形（既定は `src/stream_buddy/data/lines.toml`）：表とキーごとにセリフの配列を書く
+
+  | `Say` の場面 | ファイルの場所 |
+  | --- | --- |
+  | `silence` | `[silence]` の `calm` / `normal` / `high`（そのときのテンションで選ぶ） |
+  | `high` | `[tension]` の `high` |
+  | `death` / `clear` | `[event]` の `death` / `clear` |
 - 候補から**ランダムに選ぶ**が、**直前に出したものは選ばない**（候補が1つなら同じでもよい）
 - すべてのセリフは**1〜80 文字**（WebSocket の `say` の上限）。読み込み時に検証し、違反があれば起動しない
 - テストのため、乱数は外から渡せるようにする

@@ -28,6 +28,7 @@ SRC_DIR = ROOT / "src"
 PACKAGE_DIR = SRC_DIR / "stream_buddy"
 ENTRY_SCRIPT = PACKAGE_DIR / "__main__.py"
 OVERLAY_DIR = PACKAGE_DIR / "overlay"
+DATA_DIR = PACKAGE_DIR / "data"
 CONFIG_EXAMPLE = ROOT / "config.example.toml"
 DIST_ROOT = ROOT / "dist"
 BUILD_ROOT = ROOT / "build"
@@ -36,6 +37,8 @@ APP_NAME = "stream-buddy"
 EXE_NAME = f"{APP_NAME}.exe"
 # exe の中で server.py が Path(__file__).parent / "overlay" で見つけられる場所に置く
 OVERLAY_DEST = "stream_buddy/overlay"
+# 既定のセリフ集など。lines.py が importlib.resources で stream_buddy/data から読む
+DATA_DEST = "stream_buddy/data"
 # sounddevice は _sounddevice_data/portaudio-binaries/ から DLL を読み込む
 PORTAUDIO_DEST = "_sounddevice_data/portaudio-binaries"
 PORTAUDIO_DLL = "libportaudio64bit.dll"
@@ -118,6 +121,8 @@ def pyinstaller_args(mode: str) -> list[str]:
         str(SRC_DIR),
         "--add-data",
         f"{OVERLAY_DIR}{_DATA_SEP}{OVERLAY_DEST}",
+        "--add-data",
+        f"{DATA_DIR}{_DATA_SEP}{DATA_DEST}",
         "--add-binary",
         f"{portaudio_dll()}{_DATA_SEP}{PORTAUDIO_DEST}",
     ]

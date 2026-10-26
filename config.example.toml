@@ -28,3 +28,7 @@ background = "transparent"   # "transparent" または "chroma"
 enabled = false              # true のときだけ配信ログを書く
 output_dir = ""              # enabled = true のときは必須。絶対パスのみ
 include_speech_text = false  # 発話テキストを残すか（プライバシーのため既定は false）
+
+[lines]
+file = ""                    # 空文字なら既定のセリフ集。自分のセリフ集を使うときは絶対パスで指定
+                             # （UTF-8 の TOML、64 KB まで。読めない・誤りがあるときは起動しない）
