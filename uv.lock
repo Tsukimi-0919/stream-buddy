@@ -805,6 +805,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "sounddevice" },
     { name = "uvicorn" },
+    { name = "vosk" },
     { name = "websockets" },
 ]
 
@@ -820,7 +821,6 @@ dev = [
 ]
 spike-asr = [
     { name = "faster-whisper" },
-    { name = "vosk" },
 ]
 
 [package.metadata]
@@ -830,6 +830,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.14.1" },
     { name = "sounddevice", specifier = ">=0.5.6" },
     { name = "uvicorn", specifier = ">=0.54.0" },
+    { name = "vosk", specifier = ">=0.3.45" },
     { name = "websockets", specifier = ">=17.3" },
 ]
 
@@ -841,10 +842,7 @@ dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.17.2" },
 ]
-spike-asr = [
-    { name = "faster-whisper", specifier = ">=1.2.1" },
-    { name = "vosk", specifier = ">=0.3.45" },
-]
+spike-asr = [{ name = "faster-whisper", specifier = ">=1.2.1" }]
 
 [[package]]
 name = "tokenizers"

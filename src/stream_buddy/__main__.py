@@ -1,13 +1,15 @@
 """stream-buddy のコマンドラインエントリポイント。"""
 
 import argparse
+import asyncio
 import logging
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from stream_buddy import __version__, audio, server
+from stream_buddy import __version__, audio, keywords, server
 from stream_buddy.config import Config, ConfigError, load_config
+from stream_buddy.state.events import EventKind
 from stream_buddy.token_store import TokenStoreError, default_token_dir, load_or_create_token
 
 
@@ -35,6 +37,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="入力デバイス (マイク) の番号と名前を表示して終了する",
     )
+    parser.add_argument(
+        "--check-model",
+        action="store_true",
+        help="音声認識モデルが公式に配布されたものと一致するかを確かめて終了する",
+    )
+    parser.add_argument(
+        "--test-keywords",
+        action="store_true",
+        help="サーバーを起動せず、聞き取ったキーワードの種類 (death / clear) だけを表示する",
+    )
     args = parser.parse_args(argv)
 
     if args.list_devices:
@@ -51,23 +63,85 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(e, file=sys.stderr)
         return 2
 
-    # デモのときはマイクを開かない
-    microphone: audio.Microphone | None = None
-    if not args.demo:
-        try:
-            backend = audio.default_backend()
-            device = audio.select_device(config.audio.device, backend.input_devices())
-            microphone = audio.Microphone(backend, device)
-        except audio.AudioError as e:
-            print(e, file=sys.stderr)
-            return 2
+    if args.check_model:
+        return _check_model(config)
+
+    # デモのときはマイクも音声認識も使わない
+    if args.demo:
+        return _run(args, config, None)
 
     try:
+        setup = keywords.prepare_keywords(config.keywords)
+    except ConfigError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if setup is None and config.keywords.enabled:
+        print(keywords.MISSING_MODEL_MESSAGE)
+    if args.test_keywords and setup is None:
+        print("キーワード検知が無効なため、--test-keywords は使えません。", file=sys.stderr)
+        return 2
+
+    try:
+        backend = audio.default_backend()
+        device = audio.select_device(config.audio.device, backend.input_devices())
+        microphone = audio.Microphone(backend, device)
+    except audio.AudioError as e:
+        print(e, file=sys.stderr)
+        return 2
+
+    try:
+        if args.test_keywords and setup is not None:
+            return _test_keywords(microphone, setup)
+        # キーワード検知を Brain につなぐのは T-12。ここではモデルの確認と準備までを行う
         return _run(args, config, microphone)
     finally:
         # Ctrl+C やエラーで終わっても、ストリームを確実に閉じる
-        if microphone is not None:
-            microphone.close()
+        microphone.close()
+
+
+def _check_model(config: Config) -> int:
+    model_dir = keywords.resolve_model_dir(config.keywords.model_dir)
+    if not model_dir.is_dir():
+        print(keywords.MISSING_MODEL_MESSAGE, file=sys.stderr)
+        return 2
+    try:
+        count = keywords.verify_model(model_dir)
+    except ConfigError as e:
+        print(e, file=sys.stderr)
+        return 2
+    print(f"音声認識モデルは公式に配布されたものと一致しました（{count} ファイル）。")
+    return 0
+
+
+def _test_keywords(microphone: audio.Microphone, setup: keywords.KeywordSetup) -> int:
+    """聞き取ったキーワードの種類だけを表示する。認識した文字列は出さない。"""
+
+    async def listen() -> None:
+        loop = asyncio.get_running_loop()
+        found: asyncio.Queue[EventKind] = asyncio.Queue()
+        blocks = audio.BlockQueue()
+        listener = keywords.KeywordListener(
+            setup.spotter(),
+            blocks,
+            # 認識用のスレッドから呼ばれる。ループへは種類だけを渡す
+            lambda kind: loop.call_soon_threadsafe(found.put_nowait, kind),
+        )
+        microphone.set_sample_sink(blocks.offer)
+        microphone.start(lambda _level: None)
+        listener.start()
+        try:
+            print("キーワードを聞いています。Ctrl+C で終了します。", flush=True)
+            while True:
+                print(await found.get(), flush=True)
+        finally:
+            microphone.set_sample_sink(None)
+            listener.stop()
+
+    try:
+        asyncio.run(listen())
+    except KeyboardInterrupt:
+        print("終了しました。")
+    return 0
 
 
 def _run(args: argparse.Namespace, config: Config, microphone: audio.Microphone | None) -> int:

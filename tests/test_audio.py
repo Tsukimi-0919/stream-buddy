@@ -11,10 +11,13 @@ from fastapi.testclient import TestClient
 from stream_buddy import audio, server
 from stream_buddy.__main__ import main
 from stream_buddy.audio import (
+    BLOCK_SECONDS,
     BLOCK_SIZE,
+    MAX_QUEUE_BLOCKS,
     SAMPLE_RATE,
     SILENCE_DBFS,
     AudioError,
+    BlockQueue,
     InputDevice,
     Microphone,
     block_dbfs,
@@ -142,6 +145,68 @@ def test_microphone_ignores_blocks_after_close(fake_audio: FakeBackend) -> None:
     assert levels == []
 
 
+def test_microphone_passes_blocks_only_to_sample_sink(fake_audio: FakeBackend) -> None:
+    mic = Microphone(fake_audio, None)
+    blocks: list[np.ndarray] = []
+    mic.start(lambda _: None)
+    fake_audio.streams[0].push_level(0.1)  # 受け取り手がなければ渡さない
+    mic.set_sample_sink(blocks.append)
+    fake_audio.streams[0].push_level(0.2)
+    assert len(blocks) == 1
+    assert blocks[0].shape == (BLOCK_SIZE,)
+    mic.close()
+    fake_audio.streams[0].push_level(0.3)  # 閉じたあとは渡さない
+    assert len(blocks) == 1
+
+
+# 認識用のキュー
+
+
+def test_queue_holds_at_most_1_second() -> None:
+    assert MAX_QUEUE_BLOCKS * BLOCK_SECONDS <= 1.0
+    assert BlockQueue().size() == 0
+
+
+def test_queue_drops_blocks_when_full() -> None:
+    blocks = BlockQueue(max_blocks=3)
+    block = np.zeros(BLOCK_SIZE, dtype=np.float32)
+    results = [blocks.offer(block) for _ in range(100)]
+    # いっぱいになったら捨てる。たまり続けない
+    assert results == [True] * 3 + [False] * 97
+    assert blocks.size() == 3
+    assert blocks.dropped == 97
+
+
+def test_queue_copies_blocks() -> None:
+    blocks = BlockQueue()
+    block = np.full((BLOCK_SIZE, 1), 0.5, dtype=np.float32)
+    blocks.offer(block)
+    block.fill(0.0)  # コールバックの配列は使い回される
+    taken = blocks.take(0.1)
+    assert taken is not None
+    assert taken.shape == (BLOCK_SIZE,)
+    assert float(taken[0]) == 0.5
+
+
+def test_queue_take_times_out_and_clear_empties() -> None:
+    blocks = BlockQueue()
+    assert blocks.take(0.01) is None
+    blocks.offer(np.zeros(BLOCK_SIZE, dtype=np.float32))
+    blocks.clear()
+    assert blocks.size() == 0
+
+
+def test_microphone_to_queue_through_sink(fake_audio: FakeBackend) -> None:
+    mic = Microphone(fake_audio, None)
+    blocks = BlockQueue(max_blocks=2)
+    mic.set_sample_sink(blocks.offer)
+    mic.start(lambda _: None)
+    for _ in range(10):
+        fake_audio.streams[0].push_level(0.1)
+    assert blocks.size() == 2
+    assert blocks.dropped == 8
+
+
 # 組み立て (偽のストリーム → 発話検知 → broadcast)
 
 
@@ -255,10 +320,16 @@ def test_main_list_devices(fake_audio: FakeBackend, capsys: pytest.CaptureFixtur
 # 音声を残さないことの検査 (文字列)
 
 
-@pytest.mark.parametrize("module", ["audio.py", "detect.py"])
-@pytest.mark.parametrize("forbidden", ["wave", "soundfile", "open(", "write"])
+@pytest.mark.parametrize("module", ["audio.py", "detect.py", "keywords.py"])
+@pytest.mark.parametrize("forbidden", ["wave", "soundfile", "write"])
 def test_no_audio_file_output(module: str, forbidden: str) -> None:
     assert forbidden not in (SRC / module).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("module", ["audio.py", "detect.py"])
+def test_no_file_open(module: str) -> None:
+    # keywords.py はハッシュ確認の読み込みだけ許す (test_keywords.py で検査する)
+    assert "open(" not in (SRC / module).read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("module", ["audio.py", "detect.py"])
@@ -270,7 +341,7 @@ def test_imports_are_limited(module: str) -> None:
             imported |= {alias.name.split(".")[0] for alias in node.names}
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
-    allowed = {"math", "collections", "dataclasses", "typing", "numpy", "sounddevice"}
+    allowed = {"math", "queue", "collections", "dataclasses", "typing", "numpy", "sounddevice"}
     assert imported <= allowed
 
 

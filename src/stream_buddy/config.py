@@ -22,7 +22,7 @@ HotkeyName = Literal["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"
 Background = Literal["transparent", "chroma"]
 
 # 指定値をエラーメッセージに含めない項目 (個人的な情報を含みうるため)
-_HIDDEN_VALUE_LOCS = {("log", "output_dir"), ("lines", "file")}
+_HIDDEN_VALUE_LOCS = {("log", "output_dir"), ("lines", "file"), ("keywords", "model_dir")}
 _MAX_SHOWN_VALUE_LEN = 40
 # メモ帳などが先頭に付けることがある、UTF-8 の BOM
 UTF8_BOM = b"\xef\xbb\xbf"
@@ -84,9 +84,38 @@ class HotkeysConfig(_Section):
         return self
 
 
+def _check_model_dir(value: str) -> str:
+    # 空文字は既定の場所。指定するときは、どの OS で検証しても Windows の絶対パスとして判定する
+    if value and not PureWindowsPath(value).is_absolute():
+        raise ValueError("絶対パスで指定してください（空文字なら既定の場所）")
+    return value
+
+
 class KeywordsConfig(_Section):
+    enabled: bool = True
+    # 空文字なら <exe またはカレントフォルダ>/models/vosk-model-small-ja-0.22 (ADR 0003)
+    model_dir: Annotated[str, AfterValidator(_check_model_dir)] = ""
     death: KeywordList = ("死んだ", "やられた")
-    clear: KeywordList = ("勝った", "クリア")
+    clear: KeywordList = ("クリア", "やったー")
+    # おとりの言葉。似た音をキーワードに寄せないために文法に入れ、認識されたら検知なしにする
+    decoys: KeywordList = ("やっぱり", "クリーム", "しんどい", "かったるい")
+
+    @model_validator(mode="after")
+    def _death_and_clear_differ(self) -> Self:
+        both = sorted(set(self.death) & set(self.clear))
+        if both:
+            raise ValueError(f"death と clear に同じ言葉があります（{', '.join(both)}）")
+        return self
+
+    @model_validator(mode="after")
+    def _keywords_and_decoys_differ(self) -> Self:
+        both = sorted(set(self.death + self.clear) & set(self.decoys))
+        if both:
+            raise ValueError(
+                f"キーワード（death・clear）とおとり（decoys）に同じ言葉があります"
+                f"（{', '.join(both)}）"
+            )
+        return self
 
 
 class DisplayConfig(_Section):
