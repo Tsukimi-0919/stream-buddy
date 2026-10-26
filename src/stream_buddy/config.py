@@ -5,6 +5,7 @@
 
 import tomllib
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Annotated, Any, Literal, Self
 
@@ -18,7 +19,6 @@ from pydantic import (
 )
 from pydantic_core import ErrorDetails
 
-HotkeyName = Literal["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]
 Background = Literal["transparent", "chroma"]
 
 # 指定値をエラーメッセージに含めない項目 (個人的な情報を含みうるため)
@@ -73,9 +73,56 @@ class SilenceConfig(_Section):
     seconds: Annotated[int, AfterValidator(_in_range(5, 600))] = 20
 
 
+# ホットキーに使える修飾キー (正規の書き方の順) とキー (SR-05: これ以外は受け付けない)
+HOTKEY_MODIFIERS = ("Ctrl", "Alt", "Shift")
+HOTKEY_KEYS = tuple(f"F{n}" for n in range(1, 13))
+_HOTKEY_FORMAT = "[Ctrl+][Alt+][Shift+]F1〜F12 の形で指定してください（例: F9、Ctrl+Shift+F9）"
+
+
+@dataclass(frozen=True)
+class HotkeySpec:
+    """ホットキーの組み合わせ。modifiers は HOTKEY_MODIFIERS の順に並ぶ。"""
+
+    modifiers: tuple[str, ...]
+    key: str
+
+    def __str__(self) -> str:
+        return "+".join([*self.modifiers, self.key])
+
+
+def parse_hotkey(text: str) -> HotkeySpec:
+    """「Ctrl+Shift+F9」のような文字列を読む。修飾キーの順番と大文字・小文字は問わない。"""
+    parts = [part.strip() for part in text.split("+")]
+    *modifier_parts, key_part = parts
+    by_lower = {name.lower(): name for name in HOTKEY_MODIFIERS}
+    modifiers: set[str] = set()
+    for part in modifier_parts:
+        name = by_lower.get(part.lower())
+        if name is None:
+            raise ValueError(
+                "修飾キーは Ctrl・Alt・Shift だけです（Win キーなどは使えません）。"
+                + _HOTKEY_FORMAT
+            )
+        if name in modifiers:
+            raise ValueError(f"同じ修飾キー（{name}）が重複しています。{_HOTKEY_FORMAT}")
+        modifiers.add(name)
+    key = key_part.upper()
+    if key not in HOTKEY_KEYS:
+        raise ValueError(f"キーは F1〜F12 のどれかにしてください。{_HOTKEY_FORMAT}")
+    return HotkeySpec(tuple(m for m in HOTKEY_MODIFIERS if m in modifiers), key)
+
+
+def _normalize_hotkey(value: str) -> str:
+    # 書き方の揺れ (順番・大文字小文字) をなくし、正規の書き方で持つ
+    return str(parse_hotkey(value))
+
+
+Hotkey = Annotated[str, AfterValidator(_normalize_hotkey)]
+
+
 class HotkeysConfig(_Section):
-    death: HotkeyName = "F9"
-    clear: HotkeyName = "F10"
+    death: Hotkey = "F9"
+    clear: Hotkey = "F10"
 
     @model_validator(mode="after")
     def _keys_differ(self) -> Self:

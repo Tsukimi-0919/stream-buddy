@@ -7,7 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from stream_buddy import __version__, audio, keywords, server
+from stream_buddy import __version__, audio, hotkey, keywords, server
 from stream_buddy.config import Config, ConfigError, load_config
 from stream_buddy.state.events import EventKind
 from stream_buddy.token_store import TokenStoreError, default_token_dir, load_or_create_token
@@ -47,6 +47,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="サーバーを起動せず、聞き取ったキーワードの種類 (death / clear) だけを表示する",
     )
+    parser.add_argument(
+        "--test-hotkeys",
+        action="store_true",
+        help="ホットキーだけを登録し、押されたキーの種類 (death / clear) を表示する",
+    )
     args = parser.parse_args(argv)
 
     if args.list_devices:
@@ -66,7 +71,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check_model:
         return _check_model(config)
 
-    # デモのときはマイクも音声認識も使わない
+    # ホットキーの確認では、マイクも音声認識もサーバーも使わない
+    if args.test_hotkeys:
+        return _test_hotkeys(config)
+
+    # デモのときはマイクも音声認識もホットキーも使わない
+    # (ホットキーを Brain につなぐのは T-12。それまでは --test-hotkeys のときだけ登録する)
     if args.demo:
         return _run(args, config, None)
 
@@ -142,6 +152,40 @@ def _test_keywords(microphone: audio.Microphone, setup: keywords.KeywordSetup) -
     except KeyboardInterrupt:
         print("終了しました。")
     return 0
+
+
+def _test_hotkeys(config: Config) -> int:
+    """ホットキーだけを登録し、押されたキーの種類を表示する。"""
+
+    async def listen() -> bool:
+        loop = asyncio.get_running_loop()
+        found: asyncio.Queue[EventKind] = asyncio.Queue()
+        listener = hotkey.HotkeyListener(
+            config.hotkeys,
+            # ホットキーのスレッドから呼ばれる。ループへは種類だけを渡す
+            lambda kind: loop.call_soon_threadsafe(found.put_nowait, kind),
+        )
+        failures = listener.start()
+        try:
+            for failure in failures:
+                print(failure.message(), file=sys.stderr)
+            if not listener.registered:
+                print("登録できたホットキーがないため終了します。", file=sys.stderr)
+                return False
+            keys = "、".join(listener.registered)
+            print(f"ホットキー（{keys}）を待っています。Ctrl+C で終了します。", flush=True)
+            while True:
+                print(await found.get(), flush=True)
+        finally:
+            # Ctrl+C のときも、スレッドを止めて登録を外す
+            listener.stop()
+
+    try:
+        ok = asyncio.run(listen())
+    except KeyboardInterrupt:
+        print("終了しました。")
+        return 0
+    return 0 if ok else 2
 
 
 def _run(args: argparse.Namespace, config: Config, microphone: audio.Microphone | None) -> int:
