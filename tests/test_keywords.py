@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 import re
+import sys
 import threading
 from pathlib import Path
 
@@ -70,6 +71,12 @@ def test_keyword_and_decoy_overlap_is_error(tmp_path: Path) -> None:
     message = config_error(tmp_path, '[keywords]\ndecoys = ["クリア", "クリーム"]\n')
     assert "[keywords] キーワード（death・clear）とおとり（decoys）に同じ言葉があります" in message
     assert "クリア" in message
+
+
+def test_death_and_clear_overlap_is_error(tmp_path: Path) -> None:
+    text = '[keywords]\ndeath = ["死んだ", "終わった"]\nclear = ["クリア", "終わった"]\n'
+    message = config_error(tmp_path, text)
+    assert "[keywords] death と clear に同じ言葉があります（終わった）" in message
 
 
 def test_decoys_can_be_empty(tmp_path: Path) -> None:
@@ -307,6 +314,48 @@ class FakeModel:
     def recognizer(self, grammar_json: str) -> FakeRecognizer:
         self.grammars.append(grammar_json)
         return FakeRecognizer(self.results)
+
+
+class FakeVoskModule:
+    """偽の vosk モジュール。Model を作るときのカレントフォルダを記録する。"""
+
+    def __init__(self, fail: bool) -> None:
+        self.fail = fail
+        self.cwd_during_load: Path | None = None
+        self.model_paths: list[str] = []
+
+    def SetLogLevel(self, _level: int) -> None:
+        pass
+
+    def Model(self, model_path: str) -> object:
+        self.model_paths.append(model_path)
+        self.cwd_during_load = Path.cwd()
+        if self.fail:
+            raise Exception("Failed to create a model")  # Vosk と同じ例外
+        return object()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_vosk_model_loads_from_model_dir_and_restores_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail: bool
+) -> None:
+    fake = FakeVoskModule(fail)
+    monkeypatch.setitem(sys.modules, "vosk", fake)
+    model_dir = tmp_path / "日本語のフォルダ" / keywords.MODEL_NAME
+    model_dir.mkdir(parents=True)
+    before = Path.cwd()
+
+    if fail:
+        with pytest.raises(KeywordError, match="読み込めません"):
+            keywords.VoskModel(model_dir)
+    else:
+        keywords.VoskModel(model_dir)
+
+    # 読み込む間だけモデルのフォルダに移り、相対パスで渡す。例外が起きても元に戻る
+    assert fake.cwd_during_load is not None
+    assert fake.cwd_during_load.resolve() == model_dir.resolve()
+    assert fake.model_paths == ["."]
+    assert Path.cwd() == before
 
 
 def test_prepare_disabled_does_not_look_for_model() -> None:

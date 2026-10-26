@@ -244,7 +244,8 @@ class VoskModel:
         try:
             # Vosk は日本語などを含むパスのモデルを開けないため、読み込む間だけ
             # カレントフォルダをモデルのフォルダにして相対パスで渡す
-            # (起動時、他のスレッドが動く前に行う)
+            # (起動時、他のスレッドが動く前に行う。docs/architecture.md の「既知の制約と回避策」)。
+            # contextlib.chdir は、例外のときも必ず元のフォルダに戻す
             with contextlib.chdir(model_dir):
                 self._model = vosk.Model(model_path=".")
         except Exception as e:

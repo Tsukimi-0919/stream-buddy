@@ -101,6 +101,13 @@ class KeywordsConfig(_Section):
     decoys: KeywordList = ("やっぱり", "クリーム", "しんどい", "かったるい")
 
     @model_validator(mode="after")
+    def _death_and_clear_differ(self) -> Self:
+        both = sorted(set(self.death) & set(self.clear))
+        if both:
+            raise ValueError(f"death と clear に同じ言葉があります（{', '.join(both)}）")
+        return self
+
+    @model_validator(mode="after")
     def _keywords_and_decoys_differ(self) -> Self:
         both = sorted(set(self.death + self.clear) & set(self.decoys))
         if both:
