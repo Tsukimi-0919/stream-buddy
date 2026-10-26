@@ -25,6 +25,7 @@ dist/
 *.local.toml
 config.local.toml
 .claude/settings.local.json
+config.toml
 
 # ===== 実行時に生まれるもの（公開しない） =====
 logs/
