@@ -29,7 +29,11 @@ PyInstaller には、フォルダで配る **onedir** と、1 ファイルで配
 
 - 道具：`scripts/build_exe.py`（手順は `docs/build.md`）
 - 同じソースから onedir と onefile をビルドし、Python を入れていない状態（リポジトリの外にコピーした exe）で動かす
-- 確認した環境：（Windows のバージョン、Defender の定義のバージョン、CPU を記入）
+- 確認した環境
+  - OS：Microsoft Windows 11 Home（10.0.26300）
+  - CPU：12th Gen Intel Core i5-12400
+  - メモリ：約 32 GB（34,111,909,888 バイト）
+  - Defender の定義のバージョン：（記録なし）
 
 ## 比較の観点
 
