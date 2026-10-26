@@ -14,8 +14,10 @@ speech_threshold_db = -40.0  # -80.0〜0.0。これより大きい音量を「�
 seconds = 20                 # 5〜600。この秒数だけ発話がなければ沈黙ハンターが動く
 
 [hotkeys]
-death = "F9"                 # F1〜F12 のみ
-clear = "F10"                # F1〜F12 のみ。death と同じキーは不可
+death = "F9"                 # [Ctrl+][Alt+][Shift+]F1〜F12（例: "Ctrl+Shift+F9"）。Win キーや文字のキーは不可
+clear = "F10"                # 同上。death と同じ組み合わせは不可
+                             # 登録中はそのキー（組み合わせ）がほかのアプリに届かない。
+                             # ゲームで F9 / F10 を使う場合は "Ctrl+Shift+F9" のように変える
 
 [keywords]
 enabled = true               # false にすると音声認識（Vosk）を使わない

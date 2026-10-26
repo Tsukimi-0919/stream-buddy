@@ -46,7 +46,7 @@ stream-buddy は配信者の PC の中だけで動き、外部に公開するサ
 | SR-02 | DNS リバインディング（悪意あるドメインを `127.0.0.1` に向けて、ページや WebSocket に届く） | `Host` ヘッダーが `127.0.0.1:<port>` と一致しなければ拒否（HTTP は 400、WebSocket は受け入れずに閉じる）。あわせてトークンも必要 | なし |
 | SR-03 | 想定外のメッセージ | スキーマ検証して破棄 | なし |
 | SR-04 | 表示文字によるスクリプト実行 | `textContent`、CSP | なし |
-| SR-05 | キーロガー化・その疑い | `RegisterHotKey` のみ | なし |
+| SR-05 | キーロガー化・その疑い | `RegisterHotKey` で設定した 2 つのキー（の組み合わせ）だけを登録して受け取る。`user32` で呼ぶのは `RegisterHotKey`・`UnregisterHotKey`・`GetMessageW`・`PostThreadMessageW` だけ。キーボードのフック（`SetWindowsHookEx`）、キーの状態を調べる API（`GetAsyncKeyState`・`GetKeyState`・`GetKeyboardState`）、生の入力（`RegisterRawInputDevices`）、キーボード関係のライブラリ（`keyboard`・`pynput`・`pywin32` など）は使わない（テストで検査する） | 登録中はそのキーがほかのアプリに届かない → README と設定例で、ゲームと重なるときは修飾キーとの組み合わせに変えるよう案内する |
 | SR-06 | ログ出力先の悪用 | 設定した `output_dir` の中にだけ書く。書き込み先を正規化し、`output_dir` の中に収まることを確認してから書く | なし |
 | SR-07 | モデルファイルの改ざん | 公式配布元から人が取得する（自動ダウンロードしない）。全ファイルの SHA-256 の一覧（`src/stream_buddy/data/vosk-model-small-ja-0.22.sha256`）を同梱し、読み込む前に照合する。ファイルがない・ハッシュが違う・一覧にないファイルがあれば読み込まずに起動しない。`--check-model` で照合だけを行える | 配布元自体の侵害。照合のあと読み込むまでの間の書き換え（ローカルで同じ権限を持つ攻撃者のみ） |
 | SR-08 | 依存の脆弱性 | ロック、Dependabot、pip-audit。本体の依存の `vosk` は `requests`（と `tqdm`・`srt` など）を連れてくる。`vosk` はモデルの自動ダウンロードのために `requests` を使うが、stream-buddy はその関数を呼ばず、モデルのフォルダを必ず渡すため、通信は発生しない。`requests` などの連れてくる依存も `pip-audit` の対象 | 未公表の脆弱性 |

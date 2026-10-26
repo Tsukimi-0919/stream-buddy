@@ -116,7 +116,7 @@ def test_other_ranges(tmp_path: Path, section: str, text: str) -> None:
     assert "の範囲で指定してください" in message
 
 
-@pytest.mark.parametrize("key", ["F13", "F0", "A", "Ctrl+F9", "f9"])
+@pytest.mark.parametrize("key", ["F13", "F0", "A", "Win+F9", "Ctrl+Ctrl+F9"])
 def test_invalid_hotkey(tmp_path: Path, key: str) -> None:
     message = load_error(tmp_path, f'[hotkeys]\ndeath = "{key}"\n')
     assert "[hotkeys] death は" in message
