@@ -40,7 +40,7 @@ VOSK_MODEL_DIR = MODELS_DIR / VOSK_MODEL_NAME
 WHISPER_CACHE_DIR = MODELS_DIR / "faster-whisper"
 
 KEYWORDS = ["死んだ", "やられた", "勝った", "クリア"]
-NON_KEYWORDS = ["しんどい", "かったるい", "クリーム", "今日はいい天気"]
+NON_KEYWORDS = ["しんどい", "かったるい", "クリーム", "今日はいい天気", "買った", "よかった"]
 # Vosk の文法に渡す言い方。「死んだ」「勝った」は 1 語では語彙にないため、語彙にある単語の句にする
 VOSK_PHRASES = {
     "死んだ": "死ん だ",
@@ -50,7 +50,7 @@ VOSK_PHRASES = {
 }
 # Vosk の文法に入れる、キーワードではない「おとりの言葉」。似た音をキーワードに寄せないために使う。
 # おとりとして認識されたら「検知なし」と判定する
-VOSK_DECOYS = ["クリーム", "しんどい", "かったるい", "買った"]
+VOSK_DECOYS = ["クリーム", "しんどい", "かったるい", "買った", "よかった"]
 
 ENGINE_NAMES = ["vosk", "whisper-tiny", "whisper-base"]
 MAX_SECONDS = 3.0
