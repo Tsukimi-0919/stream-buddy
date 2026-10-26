@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 1：実装中（T-06 のスパイク完了。エンジンは Vosk に決定）**
+**Phase 1：実装中（T-07 の exe 化の試作完了。onedir を採用）**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -67,6 +67,16 @@ Phase 0（設計と守りの準備）は完了。
   - 2回目の測定で、エンジンは Vosk を採用した。「勝った」は「買った」と同じ音で区別できないため、クリアの既定のキーワードから外す方針にした（ADR 0003）
     - 3回目の測定に向けて、キーワードを「死んだ」「やられた」「クリア」「やったー」「ナイス」、読み上げる「キーワードではない言葉」を「わかった」「やっぱり」「ないです」「買った」「なんだ」「クリーム」、おとりの言葉を「クリーム」「しんどい」「かったるい」にした
   - 3回目の測定で、既定のキーワードを死亡「死んだ」「やられた」、クリア「クリア」「やったー」に決めた。「ナイス」は「ないです」とほぼ同じ音のため外した。既定のおとりの言葉は「やっぱり」「クリーム」「しんどい」「かったるい」（ADR 0003）
+- T-07：PyInstaller での exe 化の試作（本体は変更なし）
+  - `scripts/build_exe.py` に PyInstaller の設定をまとめた。`--mode onedir` / `--mode onefile` でビルドし、サイズと `stream-buddy.exe` の SHA-256 を表示し、`--version` が `0.1.0` になるかを確かめる（違えば終了コード 1）
+  - 依存は `build` グループに分けた（pyinstaller。本体・dev には入らない）
+  - 出力は onedir が `dist/stream-buddy/`、onefile が `dist/stream-buddy-onefile/`。どちらも exe の隣に `config.example.toml` を置く。コンソールは表示し、UPX は使わない
+  - OBS 用のページは exe の中の `stream_buddy/overlay` に置き、`server.py` の `Path(__file__).parent / "overlay"` のまま見つけられるようにした。PortAudio の DLL は `_sounddevice_data/portaudio-binaries` に入る
+  - 音声認識のスパイクの依存と、テスト・型チェックの依存（pytest・mypy）は含めない
+  - onedir と onefile の両方でビルドでき、`--version` で `0.1.0` が出ることを確認した
+  - 人間が `docs/build.md` の手順で確認した。どちらもリポジトリの外で `--list-devices`・`--demo` での OBS の表示・口パクが動き、Defender の手動スキャンの後もブロックされずに起動できた
+  - onedir を採用し、フォルダを zip にして配布する（ADR 0004、状態：採用）。`scripts/build_exe.py` の既定のモードを onedir にした
+  - 課題（ADR 0004）：ダウンロードしたファイル（Mark of the Web 付き）での SmartScreen と Defender の確認は Phase 4。使わない PortAudio の DLL（約 2 MB）が含まれる。依存を追加したときは exe に入るものを確認する
 
 ## まだないもの
 

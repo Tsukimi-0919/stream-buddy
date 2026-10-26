@@ -23,6 +23,9 @@ build-backend = "hatchling.build"
 packages = ["src/stream_buddy"]
 
 [dependency-groups]
+build = [
+    "pyinstaller>=6.22.3",
+]
 dev = [
     "httpx>=0.28.1",
     "mypy>=2.4.0",
