@@ -12,7 +12,7 @@ type SilenceState = Literal["listening", "waiting", "gave_up"]
 class SilenceHunter:
     """黙っている時間を数え、待ち時間を超えたら話しかける。待ち時間は倍々、3 回で打ち止め。"""
 
-    def __init__(self, start_ms: int, silence_seconds: int = c.DEFAULT_SILENCE_SECONDS) -> None:
+    def __init__(self, start_ms: int, silence_seconds: int) -> None:
         self.first_wait_ms = silence_seconds * 1000
         # 起動直後は、最初に話し終わるまで数えない
         self.state: SilenceState = "listening"

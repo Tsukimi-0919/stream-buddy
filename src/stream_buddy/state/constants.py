@@ -19,8 +19,7 @@ BONUS_DECAY_MS = 10_000  # 加点・減点が直線的に 0 に戻るまでの�
 TENSION_MIN = 0
 TENSION_MAX = 100
 
-# 沈黙ハンター (ST-11〜ST-15)
-DEFAULT_SILENCE_SECONDS = 20  # 最初の待ち時間の既定値。実際の値は設定の silence.seconds から渡す
+# 沈黙ハンター (ST-11〜ST-15)。最初の待ち時間は設定の silence.seconds を引数で渡す
 SILENCE_WAIT_MULTIPLIER = 2  # 話しかけるたびに待ち時間を何倍にするか
 SILENCE_MAX_CALLS = 3  # この回数話しかけたら打ち止め
 

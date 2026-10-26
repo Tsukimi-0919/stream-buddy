@@ -20,7 +20,7 @@ TICK = 100
 
 
 class Sim:
-    def __init__(self, silence_seconds: int = 20) -> None:
+    def __init__(self, silence_seconds: int) -> None:
         self.brain = Brain(start_ms=0, silence_seconds=silence_seconds)
         self.now = 0
         self.log: list[tuple[int, Output]] = []
@@ -44,7 +44,7 @@ class Sim:
 
 
 def test_mouth_follows_speech() -> None:
-    sim = Sim()
+    sim = Sim(silence_seconds=20)
     sim.at(1_000, SpeechStarted())
     sim.at(2_000, SpeechEnded())
     assert sim.of(Mouth) == [(1_000, Mouth(speaking=True)), (2_000, Mouth(speaking=False))]
@@ -52,7 +52,7 @@ def test_mouth_follows_speech() -> None:
 
 def test_scenario_st01_st03_st04_st02_st13_talk_clear_high_then_silence() -> None:
     """話して盛り上がる → クリア → High → 黙る → 沈黙ハンター。"""
-    sim = Sim()
+    sim = Sim(silence_seconds=20)
     sim.at(0, SpeechStarted())
     sim.at(15_000, SpeechEnded())
     sim.at(16_000, Keyword("clear"))
@@ -73,7 +73,7 @@ def test_scenario_st01_st03_st04_st02_st13_talk_clear_high_then_silence() -> Non
 
 def test_scenario_st21_st25_st24_st22_st23_death_then_hotkey() -> None:
     """死亡 → 連続のキーワードは無視 → ホットキーでクリア → 黙る。"""
-    sim = Sim()
+    sim = Sim(silence_seconds=20)
     sim.at(0, SpeechStarted())
     sim.at(12_000, SpeechEnded())
     sim.at(20_000, Keyword("death"))  # ST-21
@@ -100,7 +100,7 @@ def test_scenario_st21_st25_st24_st22_st23_death_then_hotkey() -> None:
 
 
 def test_scenario_st11_st13_st14_st15_silence_gives_up_and_restarts() -> None:
-    sim = Sim()
+    sim = Sim(silence_seconds=20)
     sim.until(60_000)
     assert sim.of(Say) == []  # 起動直後は数えない
     sim.at(60_000, SpeechStarted())

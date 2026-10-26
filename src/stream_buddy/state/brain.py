@@ -1,6 +1,5 @@
 """4 つをまとめる Brain。状態機械どうしをつなぐのはここだけ。"""
 
-from stream_buddy.state import constants as c
 from stream_buddy.state.arbiter import Arbiter
 from stream_buddy.state.event_fsm import EventMachine
 from stream_buddy.state.events import (
@@ -21,7 +20,8 @@ from stream_buddy.state.tension import Tension
 class Brain:
     """入力を各状態機械に配り、出力を出口に通して返す。"""
 
-    def __init__(self, start_ms: int, silence_seconds: int = c.DEFAULT_SILENCE_SECONDS) -> None:
+    def __init__(self, start_ms: int, silence_seconds: int) -> None:
+        """silence_seconds は設定の silence.seconds (沈黙ハンターの最初の待ち時間)。"""
         self.tension = Tension(start_ms)
         self.silence = SilenceHunter(start_ms, silence_seconds)
         self.event = EventMachine()
