@@ -44,7 +44,7 @@ def test_defaults() -> None:
     assert config.display.background == "transparent"
     assert config.log.enabled is False
     assert config.log.output_dir == ""
-    assert config.log.include_speech_text is False
+    assert config.log.include_keyword is False
     assert config.lines.file == ""
 
 

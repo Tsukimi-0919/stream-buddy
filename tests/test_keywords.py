@@ -19,6 +19,7 @@ from stream_buddy.__main__ import main
 from stream_buddy.audio import BLOCK_SIZE, BlockQueue
 from stream_buddy.config import ConfigError, KeywordsConfig, load_config
 from stream_buddy.keywords import (
+    Detection,
     Grammar,
     KeywordError,
     KeywordListener,
@@ -239,6 +240,48 @@ def test_judge(text: str, kind: str | None) -> None:
     assert GRAMMAR.judge(text) == kind
 
 
+WORDS_GRAMMAR = Grammar(
+    {"death": ("死ん だ", "やられた"), "clear": ("クリア", "やったー")},
+    ("クリーム",),
+    {"死ん だ": "死んだ", "やられた": "やられた", "クリア": "クリア", "やったー": "やったー"},
+)
+
+
+@pytest.mark.parametrize(
+    ("text", "detection"),
+    [
+        ("死ん だ", Detection("death", "死んだ")),
+        ("[unk] やられた", Detection("death", "やられた")),
+        ("やったー [unk]", Detection("clear", "やったー")),
+        ("やられた 死ん だ", Detection("death", "死んだ")),  # 同じ種類が 2 つなら、先に書いた言葉
+        ("クリーム クリア", None),
+        ("死ん だ クリア", None),
+    ],
+)
+def test_detect_returns_configured_word(text: str, detection: Detection | None) -> None:
+    assert WORDS_GRAMMAR.detect(text) == detection
+
+
+def test_detect_word_is_from_config_not_recognized_text() -> None:
+    # 認識結果にキーワード以外の言葉が混ざっても、渡すのは設定の言葉だけ
+    found = WORDS_GRAMMAR.detect("[unk] 死ん だ [unk]")
+    assert found == Detection("death", "死んだ")
+    assert "[unk]" not in found.word
+
+
+def test_build_grammar_maps_phrases_to_configured_words() -> None:
+    grammar = build_grammar(KeywordsConfig(), has_word)
+    assert grammar.words["死ん だ"] == "死んだ"
+    assert set(grammar.words.values()) == {"死んだ", "やられた", "クリア", "やったー"}
+    assert grammar.detect("死ん だ") == Detection("death", "死んだ")
+
+
+def test_spotter_returns_word_from_partial_results() -> None:
+    spotter = KeywordSpotter(FakeRecognizer([Partial("死ん だ")] * 2), WORDS_GRAMMAR)
+    assert spotter.feed(block(), 0) is None
+    assert spotter.feed(block(), 150) == Detection("death", "死んだ")
+
+
 @dataclass(frozen=True)
 class Partial:
     """FakeRecognizer に渡す部分結果 (最終結果は出ない)。"""
@@ -284,7 +327,9 @@ def final(text: str) -> str:
 
 
 def feed_all(spotter: KeywordSpotter, times_ms: list[int]) -> list[str | None]:
-    return [spotter.feed(block(), now) for now in times_ms]
+    """検知した種類 (検知しなければ None) の一覧。"""
+    found = [spotter.feed(block(), now) for now in times_ms]
+    return [d.kind if d is not None else None for d in found]
 
 
 def test_spotter_judges_final_results() -> None:
@@ -369,8 +414,8 @@ def test_listener_calls_on_keyword_from_thread() -> None:
     found: list[str] = []
     done = threading.Event()
 
-    def on_keyword(kind: str) -> None:
-        found.append(kind)
+    def on_keyword(detection: Detection) -> None:
+        found.append(detection.kind)
         done.set()
 
     listener = KeywordListener(spotter, blocks, on_keyword)
@@ -390,8 +435,8 @@ def test_listener_uses_given_clock_for_partial_results() -> None:
     done = threading.Event()
     times = iter([0, 150])
 
-    def on_keyword(kind: str) -> None:
-        found.append(kind)
+    def on_keyword(detection: Detection) -> None:
+        found.append(detection.kind)
         done.set()
 
     listener = KeywordListener(spotter, blocks, on_keyword, clock=lambda: next(times))
@@ -494,7 +539,8 @@ def test_prepare_builds_grammar(tmp_path: Path) -> None:
     config = KeywordsConfig(model_dir=str(model))
     setup = prepare_keywords(config, load_model=lambda _: fake, expected=expected)
     assert setup is not None
-    assert setup.spotter().feed(block(), 0) == "death"
+    # 渡すのは、句 (死ん だ) ではなく設定に書いた言葉
+    assert setup.spotter().feed(block(), 0) == Detection("death", "死んだ")
     assert "死ん だ" in json.loads(fake.grammars[0])
 
 

@@ -24,6 +24,13 @@ Background = Literal["transparent", "chroma"]
 # 指定値をエラーメッセージに含めない項目 (個人的な情報を含みうるため)
 _HIDDEN_VALUE_LOCS = {("log", "output_dir"), ("lines", "file"), ("keywords", "model_dir")}
 _MAX_SHOWN_VALUE_LEN = 40
+# 廃止した項目と、代わりの案内
+_REMOVED_KEYS = {
+    ("log", "include_speech_text"): (
+        "は廃止しました。話した文章はどこにも残らないため、代わりに include_keyword"
+        "（キーワードで起きた死亡・クリアに、検知した言葉を添える）を使ってください"
+    ),
+}
 # メモ帳などが先頭に付けることがある、UTF-8 の BOM
 UTF8_BOM = b"\xef\xbb\xbf"
 
@@ -172,7 +179,8 @@ class DisplayConfig(_Section):
 class LogConfig(_Section):
     enabled: bool = False
     output_dir: str = ""
-    include_speech_text: bool = False
+    # true のとき、キーワードで起きた死亡・クリアに、検知した言葉 (設定に書いたキーワード) を添える
+    include_keyword: bool = False
 
     @model_validator(mode="after")
     def _output_dir_required(self) -> Self:
@@ -228,6 +236,8 @@ def _format_error(err: ErrorDetails) -> str:
     where = _format_loc(loc)
     ctx: dict[str, Any] = err.get("ctx") or {}
     match err["type"]:
+        case "extra_forbidden" if loc in _REMOVED_KEYS:
+            return f"{where} {_REMOVED_KEYS[loc]}"
         case "extra_forbidden":
             return f"{where} は知らない項目です（書き間違いがないか確認してください）"
         case "value_error":
