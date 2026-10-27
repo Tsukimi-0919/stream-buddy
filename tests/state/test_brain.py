@@ -79,9 +79,9 @@ def test_scenario_st21_st25_st24_st22_st23_death_then_hotkey() -> None:
     sim.at(20_000, Keyword("death"))  # ST-21
     sim.at(21_000, Keyword("death"))  # ST-25: 演出中は無視
     sim.at(22_000, Hotkey("clear"))  # ST-25: ホットキーも無視
-    sim.at(24_000, Keyword("death"))  # ST-22 のあと、Cooldown のキーワードは無視
+    sim.at(24_000, Keyword("death"))  # ST-22 のあと、5 秒以内の同じ種類のキーワードは無視
     sim.at(25_000, Hotkey("clear"))  # ST-24: Cooldown 中のホットキーは受け付ける
-    sim.until(45_000)  # ST-23: 35 秒で Ready に戻る
+    sim.until(45_000)  # ST-23: 30 秒で Ready に戻る
 
     assert sim.brain.event.state == "ready"
     assert sim.of(Effect) == [(20_000, Effect("death")), (25_000, Effect("clear"))]

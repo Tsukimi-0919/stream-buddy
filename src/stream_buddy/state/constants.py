@@ -24,9 +24,9 @@ CHEER_INTERVAL_MS = 15_000  # ST-05: High の間、盛り上げセリフを言�
 SILENCE_WAIT_MULTIPLIER = 2  # 話しかけるたびに待ち時間を何倍にするか
 SILENCE_MAX_CALLS = 3  # この回数話しかけたら打ち止め
 
-# イベント (ST-21〜ST-25)
+# イベント (ST-21〜ST-26)
 EFFECT_MS = 3_000  # 演出の長さ (演出開始から)
-EVENT_COOLDOWN_MS = 10_000  # キーワードを受け付けない時間 (演出開始から)
+KEYWORD_COOLDOWN_MS = 5_000  # 同じ種類のキーワードを受け付けない時間 (その種類の前回の演出開始から)
 
 # 出口
 SAY_MIN_INTERVAL_MS = 3_000  # high / cheer / silence の吹き出しの最短間隔 (2026-10-27 に変更)
