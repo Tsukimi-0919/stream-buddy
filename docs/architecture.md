@@ -10,7 +10,7 @@
  マイク ─▶ audio ─┬─ 音量 ──▶ detect ──── SpeechStarted / SpeechEnded ─┐
                   └─ 音声のブロック（最大 1 秒分）▶ keywords ─ Keyword ─┤
  ホットキー ─▶ hotkey ─────────────────────────────────── Hotkey ──────┤
- 時計（100 ms ごと）─────────────────────────────────── Tick ────────┤
+ 時計 ───────────────────────────────────────────────── Tick ────────┤
                                                                       ▼
                                        app：入力のキュー（asyncio.Queue、1 つ）
                                                                       │ 取り出すのは 1 つのタスクだけ
@@ -60,9 +60,9 @@ Python バックエンドがすべての判断を行い、OBS のページは「
 | --- | --- |
 | `state/events.py` | 入力（`SpeechStarted`・`SpeechEnded`・`Keyword`・`Hotkey`・`Tick`）と出力（`Mouth`・`TensionChanged`・`Say`・`Effect`・`TensionPeak`）の型 |
 | `state/constants.py` | state-machine.md の数値（窓、しきい値、待ち時間、吹き出しの最短間隔など） |
-| `state/tension.py` | テンションの状態機械（ST-01〜ST-04） |
-| `state/silence.py` | 沈黙ハンター（ST-11〜ST-15） |
-| `state/event_fsm.py` | イベントの状態機械（ST-21〜ST-25） |
+| `state/tension.py` | テンションの状態機械。遷移は [docs/state-machine.md](state-machine.md) を参照 |
+| `state/silence.py` | 沈黙ハンター。遷移は [docs/state-machine.md](state-machine.md) を参照 |
+| `state/event_fsm.py` | イベントの状態機械。遷移は [docs/state-machine.md](state-machine.md) を参照。演出中の扱いとキーワードの待ち時間（種類ごと）は [docs/state-machine.md](state-machine.md) を参照 |
 | `state/arbiter.py` | 出口：`Say` の優先順位と最短間隔 |
 | `state/brain.py` | 4 つをまとめる `Brain`。入力を各状態機械に配り、出力を出口に通して返す。状態機械どうしをつなぐのはここだけ |
 
@@ -89,7 +89,7 @@ Python バックエンドがすべての判断を行い、OBS のページは「
      URL が出たあとで終わると、起動できたように見えてしまう
 7. `server` が `127.0.0.1` で待ち受けを始め、OBS 用の URL（トークン入り）をコンソールに表示する
 8. マイクの音を取り始め、認識用のスレッドを始める
-9. 時計（100 ms ごとの `Tick`）と、キューを処理するタスクを始める
+9. 時計（`Tick`。間隔は [docs/state-machine.md](state-machine.md) を参照）と、キューを処理するタスクを始める
 
 終了（Ctrl+C を含む）は逆の順番で行う。どこかで例外が起きても、マイクを閉じる・ホットキーの登録を外す・スレッドを止める、は必ず行う。
 

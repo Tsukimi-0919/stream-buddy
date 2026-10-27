@@ -12,6 +12,7 @@ import hashlib
 import json
 import sys
 import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib import resources
@@ -32,6 +33,14 @@ MISSING_MODEL_MESSAGE = (
     "（ホットキーは使えます）"
 )
 _TAKE_TIMEOUT_SECONDS = 0.1
+# 部分結果で同じ判定がこの時間続いたら検知する (途中の結果の揺れで反応しないように)
+PARTIAL_HOLD_MS = 150
+
+type Clock = Callable[[], int]
+
+
+def monotonic_ms() -> int:
+    return int(time.monotonic() * 1000)
 
 
 class KeywordError(ConfigError):
@@ -171,6 +180,7 @@ class Recognizer(Protocol):
     # メソッド名は Vosk の KaldiRecognizer に合わせる
     def AcceptWaveform(self, data: bytes) -> bool: ...
     def Result(self) -> str: ...
+    def PartialResult(self) -> str: ...
 
 
 class LoadedModel(Protocol):
@@ -178,21 +188,56 @@ class LoadedModel(Protocol):
     def recognizer(self, grammar_json: str) -> Recognizer: ...
 
 
+def _text_of(raw: str, key: str) -> str | None:
+    result: Any = json.loads(raw)
+    text = result.get(key) if isinstance(result, dict) else None
+    return text if isinstance(text, str) else None
+
+
 class KeywordSpotter:
-    """音声のブロックを Vosk に渡し、最終結果が出るたびに判定する。"""
+    """音声のブロックを Vosk に渡し、部分結果と最終結果を判定する。
+
+    - 部分結果で同じ種類の判定が PARTIAL_HOLD_MS 続いたら検知する
+    - 1 つの発話 (最終結果で区切る) につき検知は 1 回まで。部分結果で検知した発話は、
+      最終結果では検知しない。部分結果で検知しなかった発話は、最終結果で判定する
+    """
 
     def __init__(self, recognizer: Recognizer, grammar: Grammar) -> None:
         self._recognizer = recognizer
         self._grammar = grammar
+        # 部分結果で続いている判定と、その判定になった時刻
+        self._candidate: EventKind | None = None
+        self._candidate_since_ms = 0
+        # この発話ですでに検知したか
+        self._detected = False
 
-    def feed(self, samples: Samples) -> EventKind | None:
+    def feed(self, samples: Samples, now_ms: int) -> EventKind | None:
         pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
-        if not self._recognizer.AcceptWaveform(pcm):
-            return None
-        result: Any = json.loads(self._recognizer.Result())
-        text = result.get("text") if isinstance(result, dict) else None
         # 文字列は判定に使うだけで、どこにも残さない
-        return self._grammar.judge(text) if isinstance(text, str) else None
+        if self._recognizer.AcceptWaveform(pcm):
+            return self._final(_text_of(self._recognizer.Result(), "text"))
+        return self._partial(_text_of(self._recognizer.PartialResult(), "partial"), now_ms)
+
+    def _final(self, text: str | None) -> EventKind | None:
+        detected = self._detected
+        # 最終結果で発話が区切られる
+        self._candidate = None
+        self._detected = False
+        if detected or text is None:
+            return None
+        return self._grammar.judge(text)
+
+    def _partial(self, text: str | None, now_ms: int) -> EventKind | None:
+        if self._detected:
+            return None
+        kind = self._grammar.judge(text) if text is not None else None
+        if kind != self._candidate:
+            self._candidate = kind
+            self._candidate_since_ms = now_ms
+        if kind is None or now_ms - self._candidate_since_ms < PARTIAL_HOLD_MS:
+            return None
+        self._detected = True
+        return kind
 
 
 class KeywordListener:
@@ -202,11 +247,18 @@ class KeywordListener:
     """
 
     def __init__(
-        self, spotter: KeywordSpotter, blocks: BlockQueue, on_keyword: Callable[[EventKind], object]
+        self,
+        spotter: KeywordSpotter,
+        blocks: BlockQueue,
+        on_keyword: Callable[[EventKind], object],
+        *,
+        clock: Clock = monotonic_ms,
     ) -> None:
+        """clock は部分結果の判定が続いた時間を測るための時計 (ミリ秒)。"""
         self._spotter = spotter
         self._blocks = blocks
         self._on_keyword = on_keyword
+        self._clock = clock
         self._stopping = threading.Event()
         self._thread = threading.Thread(target=self._run, name="keywords", daemon=True)
 
@@ -224,7 +276,7 @@ class KeywordListener:
             block = self._blocks.take(_TAKE_TIMEOUT_SECONDS)
             if block is None:
                 continue
-            kind = self._spotter.feed(block)
+            kind = self._spotter.feed(block, self._clock())
             del block
             if kind is not None:
                 self._on_keyword(kind)

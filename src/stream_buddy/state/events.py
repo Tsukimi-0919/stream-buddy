@@ -5,7 +5,7 @@ from typing import Literal
 
 type EventKind = Literal["death", "clear"]
 type TensionLevel = Literal["calm", "normal", "high"]
-type Situation = Literal["death", "clear", "high", "silence"]
+type Situation = Literal["death", "clear", "high", "cheer", "silence"]
 
 # 入力
 

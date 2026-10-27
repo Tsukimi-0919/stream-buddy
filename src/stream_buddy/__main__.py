@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import sys
 from collections.abc import Sequence
@@ -9,6 +10,7 @@ from pathlib import Path
 
 from stream_buddy import __version__, app, audio, hotkey, keywords, lines, server
 from stream_buddy.config import Config, ConfigError, load_config
+from stream_buddy.detect import SpeechDetector
 from stream_buddy.state.events import EventKind, Hotkey
 from stream_buddy.token_store import TokenStoreError, default_token_dir, load_or_create_token
 
@@ -192,7 +194,7 @@ def _run_test_keywords(config: Config) -> int:
     if microphone is None:
         return 2
     try:
-        return _test_keywords(microphone, setup)
+        return _test_keywords(microphone, setup, config.audio.speech_threshold_db)
     finally:
         # Ctrl+C やエラーで終わっても、ストリームを確実に閉じる
         microphone.close()
@@ -212,21 +214,80 @@ def _check_model(config: Config) -> int:
     return 0
 
 
-def _test_keywords(microphone: audio.Microphone, setup: keywords.KeywordSetup) -> int:
-    """聞き取ったキーワードの種類だけを表示する。認識した文字列は出さない。"""
+class ReactionTimer:
+    """--test-keywords の表示を作る。話し終わり (detect) から検知までの時間を添える。
+
+    話し終わる前に検知したときは、話し終わるまで表示を待ち、負の値で示す。
+    """
+
+    def __init__(self) -> None:
+        self._speaking = False
+        self._ended_ms: int | None = None
+        self._waiting: list[tuple[EventKind, int]] = []
+
+    def speech(self, *, speaking: bool, now_ms: int) -> list[str]:
+        self._speaking = speaking
+        if speaking:
+            return []
+        self._ended_ms = now_ms
+        lines = [_reaction(kind, found_ms - now_ms) for kind, found_ms in self._waiting]
+        self._waiting.clear()
+        return lines
+
+    def keyword(self, kind: EventKind, now_ms: int) -> list[str]:
+        if self._speaking:
+            self._waiting.append((kind, now_ms))
+            return []
+        if self._ended_ms is None:
+            return [f"{kind} (話し終わりを検出していません)"]
+        return [_reaction(kind, now_ms - self._ended_ms)]
+
+
+def _reaction(kind: EventKind, delay_ms: int) -> str:
+    return f"{kind} ({delay_ms} ms)"
+
+
+def _test_keywords(
+    microphone: audio.Microphone,
+    setup: keywords.KeywordSetup,
+    threshold_db: float,
+    clock: keywords.Clock = keywords.monotonic_ms,
+) -> int:
+    """聞き取ったキーワードの種類と、話し終わりからの時間だけを表示する。認識した文字列は出さない。"""
 
     async def listen() -> None:
         loop = asyncio.get_running_loop()
-        found: asyncio.Queue[EventKind] = asyncio.Queue()
+        found: asyncio.Queue[str] = asyncio.Queue()
         blocks = audio.BlockQueue()
+        detector = SpeechDetector(threshold_db, audio.BLOCK_SECONDS)
+        timer = ReactionTimer()
+
+        def show(lines: list[str]) -> None:
+            for line in lines:
+                found.put_nowait(line)
+
+        def on_level_in_loop(level_db: float, now_ms: int) -> None:
+            changed = detector.update(level_db)
+            if changed is not None:
+                show(timer.speech(speaking=changed, now_ms=now_ms))
+
+        def on_level(level_db: float) -> None:
+            # 音声のスレッドから呼ばれる。渡すのは音量の数値と時刻だけ
+            with contextlib.suppress(RuntimeError):  # 終了処理中でループが閉じている
+                loop.call_soon_threadsafe(on_level_in_loop, level_db, clock())
+
+        def on_keyword_in_loop(kind: EventKind, found_ms: int) -> None:
+            show(timer.keyword(kind, found_ms))
+
         listener = keywords.KeywordListener(
             setup.spotter(),
             blocks,
-            # 認識用のスレッドから呼ばれる。ループへは種類だけを渡す
-            lambda kind: loop.call_soon_threadsafe(found.put_nowait, kind),
+            # 認識用のスレッドから呼ばれる。ループへは種類と時刻だけを渡す
+            lambda kind: loop.call_soon_threadsafe(on_keyword_in_loop, kind, clock()),
+            clock=clock,
         )
         microphone.set_sample_sink(blocks.offer)
-        microphone.start(lambda _level: None)
+        microphone.start(on_level)
         listener.start()
         try:
             print("キーワードを聞いています。Ctrl+C で終了します。", flush=True)

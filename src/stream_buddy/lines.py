@@ -19,7 +19,7 @@ from stream_buddy.state.events import Situation, TensionLevel
 # 表とキー。7 つのリストはすべて必須
 SCHEMA: dict[str, tuple[str, ...]] = {
     "silence": ("calm", "normal", "high"),
-    "tension": ("high",),
+    "tension": ("high", "cheer"),
     "event": ("death", "clear"),
 }
 MAX_FILE_BYTES = 64 * 1024
@@ -152,8 +152,8 @@ def list_for(situation: Situation, tension: TensionLevel) -> ListKey:
     match situation:
         case "silence":
             return ("silence", tension)
-        case "high":
-            return ("tension", "high")
+        case "high" | "cheer":
+            return ("tension", situation)
         case "death" | "clear":
             return ("event", situation)
 

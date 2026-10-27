@@ -100,14 +100,22 @@ def test_hotkey_clear_sends_effect_and_clear_line() -> None:
     assert sim.says("event.clear.") == [1_000]
 
 
-def test_keyword_death_sends_effect_and_line_and_ignores_repeat_within_10s() -> None:
+def test_keyword_death_sends_effect_and_line_and_ignores_repeat_within_5s() -> None:
     sim = Sim()
     sim.at(1_000, ev.Keyword("death"))
-    sim.at(5_000, ev.Keyword("death"))  # 10 秒以内の 2 回目は無視
-    sim.at(10_999, ev.Keyword("death"))
-    sim.at(11_000, ev.Keyword("death"))  # 10 秒たてば受け付ける
-    assert sim.of("effect") == [(1_000, {"kind": "death"}), (11_000, {"kind": "death"})]
-    assert sim.says("event.death.") == [1_000, 11_000]
+    sim.at(4_000, ev.Keyword("death"))  # 5 秒以内の同じ種類の 2 回目は無視
+    sim.at(5_999, ev.Keyword("death"))
+    sim.at(6_000, ev.Keyword("death"))  # 5 秒たてば受け付ける
+    assert sim.of("effect") == [(1_000, {"kind": "death"}), (6_000, {"kind": "death"})]
+    assert sim.says("event.death.") == [1_000, 6_000]
+
+
+def test_keyword_of_other_kind_is_accepted_after_effect() -> None:
+    sim = Sim()
+    sim.at(1_000, ev.Keyword("clear"))
+    sim.at(4_000, ev.Keyword("death"))  # 違う種類は演出が終われば受け付ける (ST-26)
+    assert sim.of("effect") == [(1_000, {"kind": "clear"}), (4_000, {"kind": "death"})]
+    assert sim.says("event.") == [1_000, 4_000]
 
 
 @pytest.mark.parametrize("silence_seconds", [5, 20])
@@ -292,6 +300,9 @@ class FakeRecognizer:
 
     def Result(self) -> str:
         return json.dumps({"text": "死ん だ"})
+
+    def PartialResult(self) -> str:
+        return json.dumps({"partial": ""})
 
 
 class FakeModel:
