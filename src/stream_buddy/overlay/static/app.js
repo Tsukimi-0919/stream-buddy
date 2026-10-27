@@ -7,6 +7,10 @@
   const PROTOCOL_VERSION = 0;
   const PAGE_VERSION = "0.1.0";
   const SAY_DURATION_MS = 5000;
+  // 演出の長さ。style.css の --effect-duration と state/constants.py の EFFECT_MS と同じ (テストで確認)
+  const EFFECT_DURATION_MS = 3000;
+  // メンダコの置き場所 (URL の pos=)。これ以外の値は center にする
+  const POSITIONS = ["center", "bottom-right", "bottom-left", "top-right", "top-left"];
   const RETRY_MIN_MS = 1000;
   const RETRY_MAX_MS = 10000;
 
@@ -20,12 +24,16 @@
   const token = params.get("token") || "";
   // 確認用: debug=1 のときだけ、受け取ったテンションの名前を隅に出す
   const debug = params.get("debug") === "1";
+  const pos = params.get("pos");
   const socketUrl =
     "ws://127.0.0.1:" + window.location.port + "/ws?token=" + encodeURIComponent(token);
 
   // 表示
 
   let sayTimer = null;
+  let effectTimer = null;
+
+  body.dataset.pos = POSITIONS.includes(pos) ? pos : "center";
 
   function setTension(level) {
     buddy.dataset.tension = level;
@@ -50,6 +58,20 @@
     bubble.hidden = true;
     bubbleText.textContent = "";
     sayTimer = null;
+  }
+
+  function showEffect(kind) {
+    // 演出中に次の演出が来たら、いったん外してから付け直し、最初から出し直す
+    clearTimeout(effectTimer);
+    delete body.dataset.effect;
+    void body.offsetWidth; // 外したことをブラウザに反映させる (アニメーションをやり直すため)
+    body.dataset.effect = kind;
+    effectTimer = setTimeout(hideEffect, EFFECT_DURATION_MS);
+  }
+
+  function hideEffect() {
+    delete body.dataset.effect;
+    effectTimer = null;
   }
 
   // 受信メッセージの検証
@@ -102,8 +124,7 @@
       {
         keys: ["kind"],
         valid: (p) => ["death", "clear"].includes(p.kind),
-        // 演出は Phase 3 で作る
-        apply: () => {},
+        apply: (p) => showEffect(p.kind),
       },
     ],
     [
