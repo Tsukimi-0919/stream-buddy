@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from stream_buddy import __version__, app, audio, hotkey, keywords, lines, server
+from stream_buddy import __version__, app, audio, hotkey, keywords, lines, server, stream_log
 from stream_buddy.config import Config, ConfigError, load_config
 from stream_buddy.detect import SpeechDetector
 from stream_buddy.state.events import EventKind, Hotkey
@@ -90,13 +90,35 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _start(args: argparse.Namespace, config: Config) -> int:
     """起動する (docs/architecture.md の「起動の流れ」)。終了は逆の順番で行う。"""
-    # 2. セリフ集を読み、検証する
+    # 2. セリフ集を読み、検証する。配信ログが有効なら、ほかを始める前にファイルを作る
     try:
         book = lines.load_lines(config.lines.file)
+        log = stream_log.open_stream_log(config.log)
     except ConfigError as e:
         print(e, file=sys.stderr)
         return 2
+    try:
+        code = _run(args, config, book, log)
+    except BaseException:
+        # Ctrl+C や例外で終わっても、まとめを書いて閉じる
+        if log is not None:
+            log.close()
+        raise
+    if log is not None:
+        if code == 0:
+            log.close()
+        else:
+            # 起動をやめた (マイクがないなど)。できごとがなければ、作ったファイルを消す
+            log.abandon()
+    return code
 
+
+def _run(
+    args: argparse.Namespace,
+    config: Config,
+    book: lines.LineBook,
+    log: stream_log.StreamLog | None,
+) -> int:
     # 3. トークンを読む (なければ作る)
     try:
         token, created = load_or_create_token(default_token_dir(), reset=args.reset_token)
@@ -105,7 +127,7 @@ def _start(args: argparse.Namespace, config: Config) -> int:
         return 2
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    engine = app.Engine(config, book, debug=_print_debug if args.debug else None)
+    engine = app.Engine(config, book, debug=_print_debug if args.debug else None, log=log)
 
     # デモのときはマイクも音声認識もホットキーも使わず、偽の入力を Brain に入れる
     if args.demo:
@@ -292,8 +314,10 @@ def _test_keywords(
         listener = keywords.KeywordListener(
             setup.spotter(),
             blocks,
-            # 認識用のスレッドから呼ばれる。ループへは種類と時刻だけを渡す
-            lambda kind: loop.call_soon_threadsafe(on_keyword_in_loop, kind, clock()),
+            # 認識用のスレッドから呼ばれる。ループへは種類と時刻だけを渡す (言葉は表示しない)
+            lambda detection: loop.call_soon_threadsafe(
+                on_keyword_in_loop, detection.kind, clock()
+            ),
             clock=clock,
         )
         microphone.set_sample_sink(blocks.offer)

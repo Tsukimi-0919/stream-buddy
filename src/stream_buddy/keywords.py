@@ -3,6 +3,8 @@
 プライバシーと安全のため、次を守る。
 - 音声は BlockQueue から受け取ったらすぐに Vosk に渡し、手元に残さない
 - 認識した文字列は、どのキーワードかを判定したら捨てる。ファイル・ログ・コンソールに出さない
+- 検知したときに外へ渡すのは、種類と、設定に書いたキーワードのうちどれか (Detection)。
+  認識した文字列そのものは渡さない
 - モデルは読み込む前に、同梱したハッシュの一覧と照合する (SR-07)。合わなければ読み込まない
 - Vosk の結果は json.loads だけで読む。Vosk にはモデルのフォルダを必ず渡す (ネットから取得させない)
 """
@@ -14,7 +16,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 from typing import Any, Protocol
@@ -141,11 +143,21 @@ def _contains(tokens: Sequence[str], phrase: Sequence[str]) -> bool:
 
 
 @dataclass(frozen=True)
+class Detection:
+    """検知したキーワード。word は設定に書いたキーワードそのもの (認識した文字列ではない)。"""
+
+    kind: EventKind
+    word: str
+
+
+@dataclass(frozen=True)
 class Grammar:
     """Vosk の文法と、認識結果からの判定。"""
 
     keywords: Mapping[EventKind, tuple[str, ...]]  # 種類ごとの句
     decoys: tuple[str, ...]
+    # 句から、設定に書いたキーワードへ (ないときは句をそのまま使う)
+    words: Mapping[str, str] = field(default_factory=dict)
 
     def to_json(self) -> str:
         phrases = [p for kind in ("death", "clear") for p in self.keywords.get(kind, ())]
@@ -154,23 +166,35 @@ class Grammar:
 
     def judge(self, text: str) -> EventKind | None:
         """認識した文字列から、どのキーワードか。決められなければ None。"""
+        detection = self.detect(text)
+        return detection.kind if detection is not None else None
+
+    def detect(self, text: str) -> Detection | None:
+        """認識した文字列から、種類と設定に書いた言葉を決める。決められなければ None。"""
         tokens = text.split()
         if any(_contains(tokens, d.split()) for d in self.decoys):
             return None
-        kinds: list[EventKind] = [
-            kind
+        found = [
+            (kind, matched)
             for kind, phrases in self.keywords.items()
-            if any(_contains(tokens, p.split()) for p in phrases)
+            if (matched := [p for p in phrases if _contains(tokens, p.split())])
         ]
         # どちらか決められないときは、検知しない
-        return kinds[0] if len(kinds) == 1 else None
+        if len(found) != 1:
+            return None
+        kind, matched = found[0]
+        return Detection(kind, self.words.get(matched[0], matched[0]))
 
 
 def build_grammar(config: KeywordsConfig, has_word: Vocabulary) -> Grammar:
     death = tuple(to_phrase(w, has_word, "[keywords] death") for w in config.death)
     clear = tuple(to_phrase(w, has_word, "[keywords] clear") for w in config.clear)
     decoys = tuple(to_phrase(w, has_word, "[keywords] decoys") for w in config.decoys)
-    return Grammar({"death": death, "clear": clear}, decoys)
+    # 句から設定の言葉へ。同じ句になる言葉が 2 つあれば、先に書いたほう
+    words: dict[str, str] = {}
+    for phrase, word in zip((*death, *clear), (*config.death, *config.clear), strict=True):
+        words.setdefault(phrase, word)
+    return Grammar({"death": death, "clear": clear}, decoys, words)
 
 
 # 認識
@@ -211,38 +235,40 @@ class KeywordSpotter:
         # この発話ですでに検知したか
         self._detected = False
 
-    def feed(self, samples: Samples, now_ms: int) -> EventKind | None:
+    def feed(self, samples: Samples, now_ms: int) -> Detection | None:
         pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
         # 文字列は判定に使うだけで、どこにも残さない
         if self._recognizer.AcceptWaveform(pcm):
             return self._final(_text_of(self._recognizer.Result(), "text"))
         return self._partial(_text_of(self._recognizer.PartialResult(), "partial"), now_ms)
 
-    def _final(self, text: str | None) -> EventKind | None:
+    def _final(self, text: str | None) -> Detection | None:
         detected = self._detected
         # 最終結果で発話が区切られる
         self._candidate = None
         self._detected = False
         if detected or text is None:
             return None
-        return self._grammar.judge(text)
+        return self._grammar.detect(text)
 
-    def _partial(self, text: str | None, now_ms: int) -> EventKind | None:
+    def _partial(self, text: str | None, now_ms: int) -> Detection | None:
         if self._detected:
             return None
-        kind = self._grammar.judge(text) if text is not None else None
+        detection = self._grammar.detect(text) if text is not None else None
+        kind = detection.kind if detection is not None else None
         if kind != self._candidate:
             self._candidate = kind
             self._candidate_since_ms = now_ms
-        if kind is None or now_ms - self._candidate_since_ms < PARTIAL_HOLD_MS:
+        if detection is None or now_ms - self._candidate_since_ms < PARTIAL_HOLD_MS:
             return None
         self._detected = True
-        return kind
+        return detection
 
 
 class KeywordListener:
     """認識用のスレッド。キューからブロックを取り出して判定し、検知したら on_keyword を呼ぶ。
 
+    on_keyword には Detection を渡す。
     on_keyword はこのスレッドから呼ばれる (asyncio へは call_soon_threadsafe で渡すこと)。
     """
 
@@ -250,7 +276,7 @@ class KeywordListener:
         self,
         spotter: KeywordSpotter,
         blocks: BlockQueue,
-        on_keyword: Callable[[EventKind], object],
+        on_keyword: Callable[[Detection], object],
         *,
         clock: Clock = monotonic_ms,
     ) -> None:
@@ -276,10 +302,10 @@ class KeywordListener:
             block = self._blocks.take(_TAKE_TIMEOUT_SECONDS)
             if block is None:
                 continue
-            kind = self._spotter.feed(block, self._clock())
+            detection = self._spotter.feed(block, self._clock())
             del block
-            if kind is not None:
-                self._on_keyword(kind)
+            if detection is not None:
+                self._on_keyword(detection)
 
 
 # 準備

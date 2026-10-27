@@ -32,9 +32,11 @@ decoys = ["やっぱり", "クリーム", "しんどい", "かったるい"]
 background = "transparent"   # "transparent" または "chroma"
 
 [log]
-enabled = false              # true のときだけ配信ログを書く
-output_dir = ""              # enabled = true のときは必須。絶対パスのみ
-include_speech_text = false  # 発話テキストを残すか（プライバシーのため既定は false）
+enabled = false              # true のときだけ配信ログ（テンション High・死亡・クリアの時刻の Markdown）を書く
+output_dir = ""              # enabled = true のときは必須。絶対パスのみ。フォルダはあらかじめ作っておく
+                             # （Obsidian の Vault の中のフォルダも指定できる。起動ごとに新しいファイルを作る）
+include_keyword = false      # true のとき、キーワードで起きた死亡・クリアに、検知した言葉（例：死んだ）を添える
+                             # 2026-10-27 に include_speech_text は廃止（書いてあるとエラー）
 
 [lines]
 file = ""                    # 空文字なら既定のセリフ集。自分のセリフ集を使うときは絶対パスで指定

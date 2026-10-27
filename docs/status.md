@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 3：T-15 の死亡・クリアの画面演出まで実装。OBS での演出の確認（人間）待ち**
+**Phase 3：T-16 の配信ログまで実装。OBS での演出の確認と、配信ログの手動確認（人間）待ち**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -118,7 +118,7 @@ Phase 0（設計と守りの準備）は完了。
 
 - T-12：組み立て（`src/stream_buddy/app.py`）
   - `Engine`：すべての入力（発話・キーワード・ホットキー・100 ms ごとの `Tick`）を `asyncio` の 1 つのキュー（上限 1000、あふれたら捨てて数だけを警告）に集め、1 つのタスクだけが取り出して `Brain.step` に通す。時刻は取り出したときの `time.monotonic()`（差し替えられる）
-  - 出力を `speech`・`tension`・`say`（`LinePicker` で今のテンションに合わせて選ぶ）・`effect` にして送る。`TensionPeak` は送らない（Phase 3 のログ用）
+  - 出力を `speech`・`tension`・`say`（`LinePicker` で今のテンションに合わせて選ぶ）・`effect` にして送る。`TensionPeak` は送らない（配信ログにだけ書く。T-16）
   - `Runtime`：サーバーの起動後に、マイク・認識用のスレッド、時計とキューの処理を始め、終了時は逆の順番で止める
   - `__main__.py`：設定 → セリフ集 → トークン → モデル → ホットキー → サーバーの順に起動する。例外や Ctrl+C でも、マイクを閉じ、ホットキーの登録を外す。ホットキーが 1 つも登録できなくても起動は続ける
   - `server.py`：デモとマイクを直接扱う経路をやめ、`Runtime` を lifespan の中で動かす。`hello` には `display` と今の `tension` を返す
@@ -169,14 +169,29 @@ Phase 0（設計と守りの準備）は完了。
   - README に `&pos=` の使い方と、画面全体に演出を出すときのブラウザソースの大きさを書いた
   - 未確認：OBS での見た目・まぶしさ、透過とクロマキーでの見え方、アニメーション効果をオフにしたときの見え方（人間）
 
+- T-16：配信ログ（`stream_log.py`。Markdown・Obsidian 対応）
+  - `log.enabled = true` のとき、起動ごとに `output_dir` の直下へ `stream-buddy-YYYY-MM-DD-HHMMSS.md`（起動した日時、ローカル時刻）を新しく作る
+    - 起動時、セリフ集の次・ほかを始める前に作る。`output_dir` がない・フォルダでない・書き込めないときは起動しない。フォルダは作らない。エラーメッセージにパスは出さない
+    - SR-06：ファイル名は日時からだけ作る。`resolve()` で正規化して `output_dir` の直下にあることを確かめ、新規作成専用（`"x"`）で開く。同じ名前があれば `-2`〜`-10` を付け、10 回でだめならエラー。UTF-8（BOM なし）・LF
+  - 内容：フロントマター（`date`・`start`・`tags`）、見出し、表（経過・時刻・できごと）、終了時のまとめ（配信時間、テンション High・死亡・クリアの回数）
+    - 経過は `time.monotonic()` の差、時刻はローカルの壁時計。どちらもテストで差し替えられる
+    - できごとは `TensionPeak` →「テンション High」、`Effect` →「死亡」「クリア」。表の文字列から `|` と改行を取り除く
+    - できごとのたびに 1 行書いて `flush` する。終了時（Ctrl+C・例外を含む）に `__main__` でまとめを書いて閉じる。書けないときは警告を 1 回だけ出し、メンダコは止めない
+    - 起動をやめたとき（マイクがないなど、`_run` が 0 以外を返したとき）は `StreamLog.abandon()` を呼ぶ。できごとが 1 行もなければ、この起動で作ったファイルだけを消す（作ったときのパスを覚えておき、消す前に `resolve()` で `output_dir` の直下にあることを確かめる）。1 行でもあれば、まとめを書いて残す。消せなくても警告だけ（起動失敗のエラーは今までどおり）
+  - `include_keyword = true` のときだけ、キーワードで起きた死亡・クリアに検知した言葉を `死亡（死んだ）` のように添える。ホットキーのときは添えない
+    - `keywords.py`：`Grammar.detect` と `Detection(kind, word)` を追加。`word` は設定に書いたキーワードそのもの（句から設定の言葉に戻す）。`KeywordSpotter.feed` と `on_keyword` は `Detection` を渡す。認識した文字列は渡さない
+    - `app.py`：キーワードは `HeardKeyword(Keyword, word)` としてキューに入れ、`Brain` には `Keyword` だけを入れる。同じ入力の `step` で出た `Effect` にだけ言葉を対応させる（状態機械は変更なし）
+  - 設定：`[log] include_speech_text` を廃止して `include_keyword` に置き換えた。`include_speech_text` が書いてあると、`include_keyword` を案内するエラーになる
+  - 設計書（requirements の FR-10・SR-06・プライバシー、threat-model の SR-06、architecture）、`config.example.toml`、README（使い方と、記録するもの・しないもの）を直した
+  - `--demo` のキーワードは言葉を持たないため、デモでは `include_keyword = true` でも言葉は添わない
+  - 未確認：Obsidian での表示、実際に「死んだ」と言ったときの記録（人間）
+
 ## まだないもの
 
-- 機能モジュール（log）
 - CPU 使用率の計測（NFR-01）
 - メンダコの本番の画像（今は仮の SVG）
-- ログ出力先フォルダの存在確認・書き込み時のパス確認（ログのタスクで行う）
 
 ## 次にやること
 
 - Phase 2 のゲート：`uv run stream-buddy` と exe で、OBS での手動確認（人間）
-- Phase 3：配信ログ（T-16）
+- Phase 3：T-15・T-16 の手動確認（人間）

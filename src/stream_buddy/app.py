@@ -4,6 +4,8 @@
   1 つのキューに集める。スレッドからは call_soon_threadsafe で入れる
 - キューから取り出して Brain.step を呼ぶのは、1 つのタスク (pump) だけ
 - 発話の内容・認識した文字列・セリフ選びの途中経過は、ログにもコンソールにも出さない
+- 配信ログ (stream_log) には、TensionPeak と Effect だけを書く。キーワードで起きた Effect には、
+  検知した言葉 (設定に書いたキーワード) を渡す
 """
 
 import asyncio
@@ -12,6 +14,7 @@ import logging
 import random
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
 from typing import assert_never
 
 from stream_buddy import demo as demo_mode
@@ -34,6 +37,7 @@ from stream_buddy.protocol import (
 from stream_buddy.state import constants
 from stream_buddy.state import events as ev
 from stream_buddy.state.brain import Brain, Snapshot
+from stream_buddy.stream_log import StreamLog
 
 MAX_QUEUE = 1000
 _DROP_WARNING_EVERY = 100
@@ -43,6 +47,20 @@ DEBUG_INTERVAL_MS = 2_000
 type Clock = Callable[[], int]
 type Broadcast = Callable[[ServerMessage], Awaitable[None]]
 type DebugOut = Callable[[str], None]
+
+
+@dataclass(frozen=True)
+class HeardKeyword:
+    """キーワードの入力と、検知した言葉 (設定に書いたキーワードのどれか)。
+
+    Brain には keyword だけを入れる。word は、同じ入力で出た Effect を配信ログに書くときに使う。
+    """
+
+    keyword: ev.Keyword
+    word: str
+
+
+type QueueItem = ev.Input | HeardKeyword
 
 logger = logging.getLogger(__name__)
 
@@ -89,17 +107,22 @@ class Engine:
         rng: random.Random | None = None,
         max_queue: int = MAX_QUEUE,
         debug: DebugOut | None = None,
+        log: StreamLog | None = None,
     ) -> None:
-        """debug を渡すと、状態の確認用の行 ([debug] ...) をそこに出す (--debug)。"""
+        """debug を渡すと、状態の確認用の行 ([debug] ...) をそこに出す (--debug)。
+
+        log を渡すと、TensionPeak と Effect を配信ログに書く。
+        """
         self._silence_seconds = config.silence.seconds
         self._clock = clock
         self._picker = LinePicker(book, rng if rng is not None else random.Random())  # noqa: S311  セリフ選び (暗号用途ではない)
         self._max_queue = max_queue
         self._debug = debug
+        self._log = log
         self.brain = Brain(start_ms=clock(), silence_seconds=self._silence_seconds)
         self._debug_last_ms = clock()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._queue: asyncio.Queue[ev.Input] | None = None
+        self._queue: asyncio.Queue[QueueItem] | None = None
         self.dropped = 0
 
     # 入力
@@ -114,7 +137,7 @@ class Engine:
     def unbind(self) -> None:
         self._loop = None
 
-    def submit(self, event: ev.Input) -> None:
+    def submit(self, event: QueueItem) -> None:
         """ループの中から入力を入れる。いっぱいなら捨てて数える。"""
         if self._queue is None:
             return
@@ -126,7 +149,7 @@ class Engine:
                 # 中身は出さず、数だけを残す
                 logger.warning("入力が多すぎるため捨てました（合計 %d 件）", self.dropped)
 
-    def submit_threadsafe(self, event: ev.Input) -> None:
+    def submit_threadsafe(self, event: QueueItem) -> None:
         """ほかのスレッドから入力を入れる。ループが動いていなければ捨てる。"""
         loop = self._loop
         if loop is None:
@@ -149,11 +172,14 @@ class Engine:
                 # 1 つの入力で失敗しても、メンダコが止まらないように続ける (入力の中身は出さない)
                 logger.exception("入力の処理中にエラーが起きました（処理は続けます）")
 
-    async def handle(self, event: ev.Input, broadcast: Broadcast) -> None:
+    async def handle(self, item: QueueItem, broadcast: Broadcast) -> None:
         """1 つの入力を Brain に通し、出力をページに送る。時刻は取り出したときに付ける。"""
         now_ms = self._clock()
         before = self.tension
+        # キーワードで起きた Effect は、同じ入力の step の出力に出る (ST-21)
+        event, word = (item.keyword, item.word) if isinstance(item, HeardKeyword) else (item, None)
         for output in self.brain.step(event, now_ms):
+            self._write_log(output, word)
             message = self.to_message(output)
             if message is not None:
                 await broadcast(message)
@@ -168,6 +194,17 @@ class Engine:
             self._debug_last_ms = now_ms
             out(format_debug(self.brain.snapshot(now_ms)))
 
+    def _write_log(self, output: ev.Output, word: str | None) -> None:
+        if self._log is None:
+            return
+        match output:
+            case ev.TensionPeak():
+                self._log.peak()
+            case ev.Effect(kind):
+                self._log.effect(kind, word)
+            case _:
+                pass
+
     def to_message(self, output: ev.Output) -> ServerMessage | None:
         match output:
             case ev.Mouth(speaking):
@@ -180,7 +217,7 @@ class Engine:
             case ev.Effect(kind):
                 return Effect(payload=EffectPayload(kind=kind))
             case ev.TensionPeak():
-                return None  # 配信ログ (Phase 3) で使う。今は送らない
+                return None  # ページには送らない (配信ログに書く)
             case _:
                 assert_never(output)
 
@@ -259,8 +296,10 @@ class Runtime:
             listener = KeywordListener(
                 self._keywords.spotter(),
                 blocks,
-                # 認識用のスレッドから呼ばれる。渡すのはキーワードの種類だけ
-                lambda kind: engine.submit_threadsafe(ev.Keyword(kind)),
+                # 認識用のスレッドから呼ばれる。渡すのはキーワードの種類と、設定に書いた言葉だけ
+                lambda detection: engine.submit_threadsafe(
+                    HeardKeyword(ev.Keyword(detection.kind), detection.word)
+                ),
             )
             microphone.set_sample_sink(blocks.offer)
             listener.start()
