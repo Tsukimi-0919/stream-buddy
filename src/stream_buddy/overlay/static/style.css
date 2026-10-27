@@ -1,5 +1,10 @@
 /* stream-buddy のページ。見た目の切り替えはクラスと data- 属性で行う */
 
+:root {
+  /* 演出 (死亡・クリア) の長さ。state/constants.py の EFFECT_MS と同じにする (テストで確認) */
+  --effect-duration: 3s;
+}
+
 html,
 body {
   margin: 0;
@@ -17,6 +22,9 @@ body[data-background="chroma"] {
 }
 
 .stage {
+  /* 演出の層より手前に出す (吹き出しとメンダコは演出に隠れない) */
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -25,6 +33,23 @@ body[data-background="chroma"] {
   box-sizing: border-box;
   padding: 16px;
   font-family: "Yu Gothic UI", "Meiryo", sans-serif;
+}
+
+/* メンダコの置き場所 (URL の pos=)。center は上の指定のまま */
+
+body[data-pos="top-left"] .stage,
+body[data-pos="top-right"] .stage {
+  justify-content: flex-start;
+}
+
+body[data-pos="top-left"] .stage,
+body[data-pos="bottom-left"] .stage {
+  align-items: flex-start;
+}
+
+body[data-pos="top-right"] .stage,
+body[data-pos="bottom-right"] .stage {
+  align-items: flex-end;
 }
 
 /* 吹き出し */
@@ -94,7 +119,8 @@ body[data-background="chroma"] {
 .fin,
 .eyelid,
 .eyelids,
-.sparkles {
+.sparkles,
+.eyes-sad {
   transition: fill 0.5s ease, stroke 0.5s ease, filter 0.5s ease, opacity 0.5s ease;
 }
 
@@ -122,8 +148,22 @@ body[data-background="chroma"] {
   transform-origin: center;
 }
 
+.brow {
+  fill: none;
+  stroke: #2b1a1f;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.tear {
+  fill: #8fd3ff;
+  stroke: #4a9ccc;
+  stroke-width: 1;
+}
+
 .eyelids,
-.sparkles {
+.sparkles,
+.eyes-sad {
   opacity: 0;
 }
 
@@ -266,6 +306,203 @@ body[data-background="chroma"] {
 @keyframes float-reduced {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-2px); }
+}
+
+/* 画面演出 (死亡・クリア): body の data-effect で切り替え、--effect-duration で 1 回だけ動かす。
+   光の点滅への配慮: 点滅・フラッシュは使わず、明るさの変化は 0.5 秒以上かけて行う */
+
+.effect {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.effect-vignette,
+.effect-rainbow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+/* 死亡: 周りほど暗いビネット */
+.effect-vignette {
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.8) 100%);
+}
+
+/* クリア: 中心から広がる虹色 */
+.effect-rainbow {
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 110, 110, 0.55) 0%,
+    rgba(255, 190, 90, 0.5) 18%,
+    rgba(255, 240, 120, 0.45) 34%,
+    rgba(120, 220, 140, 0.4) 50%,
+    rgba(110, 180, 255, 0.35) 66%,
+    rgba(190, 130, 255, 0.3) 82%,
+    rgba(190, 130, 255, 0) 100%
+  );
+}
+
+body[data-effect="death"] .effect-vignette {
+  animation: effect-dim var(--effect-duration) ease-in-out;
+}
+
+body[data-effect="death"] .buddy-motion {
+  animation: effect-fade var(--effect-duration) ease-in-out,
+    effect-sink var(--effect-duration) ease-in-out;
+}
+
+body[data-effect="death"] .buddy .eyes-sad {
+  opacity: 1;
+}
+
+body[data-effect="death"] .buddy .eyelids,
+body[data-effect="death"] .buddy .sparkles {
+  opacity: 0;
+}
+
+body[data-effect="death"] .tear {
+  animation: effect-tear var(--effect-duration) ease-in;
+}
+
+body[data-effect="clear"] .effect-rainbow {
+  animation: effect-glow var(--effect-duration) ease-in-out,
+    effect-spread var(--effect-duration) ease-out;
+}
+
+body[data-effect="clear"] .buddy-motion {
+  animation: effect-jump var(--effect-duration) ease-out;
+}
+
+body[data-effect="clear"] .buddy .sparkles {
+  opacity: 1;
+}
+
+body[data-effect="clear"] .buddy .eyelids {
+  opacity: 0;
+}
+
+body[data-effect="clear"] .confetti {
+  display: block;
+}
+
+/* 紙吹雪: あらかじめ用意した 30 個の粒を、:nth-child で色・位置・タイミングを変えて落とす */
+
+.confetti {
+  display: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -24px;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  background: #ff6f7d;
+  animation: effect-fall-left calc(var(--effect-duration) * 0.75) ease-in both;
+}
+
+.confetti-piece:nth-child(2n) {
+  width: 12px;
+  height: 10px;
+  animation-name: effect-fall-right;
+}
+
+/* 色 */
+.confetti-piece:nth-child(5n + 2) { background: #ffb347; }
+.confetti-piece:nth-child(5n + 3) { background: #ffe066; }
+.confetti-piece:nth-child(5n + 4) { background: #6ed88a; }
+.confetti-piece:nth-child(5n + 5) { background: #6fb7ff; }
+
+/* 横の位置 */
+.confetti-piece:nth-child(10n + 1) { left: 4%; }
+.confetti-piece:nth-child(10n + 2) { left: 14%; }
+.confetti-piece:nth-child(10n + 3) { left: 25%; }
+.confetti-piece:nth-child(10n + 4) { left: 34%; }
+.confetti-piece:nth-child(10n + 5) { left: 45%; }
+.confetti-piece:nth-child(10n + 6) { left: 55%; }
+.confetti-piece:nth-child(10n + 7) { left: 64%; }
+.confetti-piece:nth-child(10n + 8) { left: 75%; }
+.confetti-piece:nth-child(10n + 9) { left: 85%; }
+.confetti-piece:nth-child(10n + 10) { left: 95%; }
+
+/* 落ち始めの時刻 (演出の長さの中で落ち終わる) */
+.confetti-piece:nth-child(3n + 2) { animation-delay: calc(var(--effect-duration) * 0.1); }
+.confetti-piece:nth-child(3n + 3) { animation-delay: calc(var(--effect-duration) * 0.2); }
+
+/* 明るさの変化 (暗くなる・明るくなる・色があせる) は、どの区切りも 0.5 秒以上あける */
+
+@keyframes effect-dim {
+  0%, 100% { opacity: 0; }
+  25%, 70% { opacity: 1; }
+}
+
+@keyframes effect-glow {
+  0%, 100% { opacity: 0; }
+  25%, 70% { opacity: 1; }
+}
+
+@keyframes effect-fade {
+  0%, 100% { filter: grayscale(0) brightness(1); }
+  25%, 75% { filter: grayscale(0.8) brightness(0.85); }
+}
+
+/* 動き (prefers-reduced-motion のときは止める) */
+
+@keyframes effect-sink {
+  0%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(18px) scale(1, 0.94); }
+}
+
+@keyframes effect-tear {
+  0% { transform: translateY(-4px); }
+  100% { transform: translateY(10px); }
+}
+
+@keyframes effect-spread {
+  0% { transform: scale(0.4); }
+  40%, 100% { transform: scale(1.3); }
+}
+
+@keyframes effect-jump {
+  0% { transform: translateY(0) scale(1); }
+  8% { transform: translateY(6px) scale(1.08, 0.92); }
+  22% { transform: translateY(-70px) scale(0.95, 1.06); }
+  36% { transform: translateY(0) scale(1.08, 0.92); }
+  44%, 100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes effect-fall-left {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); }
+  100% { transform: translateY(110vh) translateX(-40px) rotate(540deg); }
+}
+
+@keyframes effect-fall-right {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); }
+  100% { transform: translateY(110vh) translateX(40px) rotate(-540deg); }
+}
+
+/* 動きを減らす設定のときは、演出の動き (紙吹雪・跳ねる・沈む・広がる・涙) を出さず、色の変化だけにする */
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-effect="clear"] .confetti {
+    display: none;
+  }
+
+  body[data-effect="clear"] .buddy-motion,
+  body[data-effect="death"] .tear {
+    animation: none;
+  }
+
+  body[data-effect="death"] .buddy-motion {
+    animation: effect-fade var(--effect-duration) ease-in-out;
+  }
+
+  body[data-effect="clear"] .effect-rainbow {
+    animation: effect-glow var(--effect-duration) ease-in-out;
+  }
 }
 
 /* 確認用のテンションの表示 (URL に debug=1 があるときだけ) */

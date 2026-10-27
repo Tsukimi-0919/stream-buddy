@@ -6,9 +6,47 @@
     <link rel="stylesheet" href="/static/style.css">
     <script src="/static/app.js" defer></script>
   </head>
-  <body data-background="transparent">
+  <body data-background="transparent" data-pos="center">
     <!-- 確認用のテンションの表示。URL に debug=1 があるときだけ app.js が表示する -->
     <p id="debug-tension" class="debug-tension" hidden></p>
+    <!-- 画面演出 (死亡・クリア)。app.js が body の data-effect を付け外しし、style.css で動かす -->
+    <!-- 紙吹雪の粒はあらかじめ用意し、:nth-child で色・位置・タイミングを変える -->
+    <div class="effect" aria-hidden="true">
+      <div class="effect-vignette"></div>
+      <div class="effect-rainbow"></div>
+      <div class="confetti">
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+        <span class="confetti-piece"></span>
+      </div>
+    </div>
     <main class="stage">
       <div id="bubble" class="bubble" hidden>
         <p id="bubble-text" class="bubble-text"></p>
@@ -16,29 +54,38 @@
       <!-- 仮のメンダコ。本番の画像への差し替えは後のタスクで行う -->
       <!-- 目の形は、テンションごとの要素を用意し、style.css で表示を切り替える -->
       <div id="buddy" class="buddy" data-tension="normal">
-        <svg class="buddy-svg" viewBox="0 0 200 170" role="img" aria-label="メンダコ (仮)">
-          <ellipse class="fin" cx="52" cy="52" rx="18" ry="11"/>
-          <ellipse class="fin" cx="148" cy="52" rx="18" ry="11"/>
-          <path class="body" d="M20 135 C20 70 55 40 100 40 C145 40 180 70 180 135 C165 150 150 140 140 135 C125 152 112 145 100 138 C88 145 75 152 60 135 C50 140 35 150 20 135 Z"/>
-          <circle class="eye" cx="76" cy="92" r="7"/>
-          <circle class="eye" cx="124" cy="92" r="7"/>
-          <!-- Calm: 半目 (目の上半分をまぶたで隠す) -->
-          <g class="eyelids">
-            <path class="eyelid" d="M67 93 A9 9 0 0 1 85 93 Z"/>
-            <path class="eyelid" d="M115 93 A9 9 0 0 1 133 93 Z"/>
-            <path class="eyelid-line" d="M67 93 L85 93"/>
-            <path class="eyelid-line" d="M115 93 L133 93"/>
-          </g>
-          <!-- High: キラキラ (目の中の光と、目のそばの星) -->
-          <g class="sparkles">
-            <circle class="eye-shine" cx="79" cy="89" r="2.5"/>
-            <circle class="eye-shine" cx="127" cy="89" r="2.5"/>
-            <path class="sparkle" d="M56 74 L58 80 L64 82 L58 84 L56 90 L54 84 L48 82 L54 80 Z"/>
-            <path class="sparkle" d="M144 74 L146 80 L152 82 L146 84 L144 90 L142 84 L136 82 L142 80 Z"/>
-          </g>
-          <path class="mouth mouth-closed" d="M90 112 Q100 119 110 112"/>
-          <ellipse class="mouth mouth-open" cx="100" cy="115" rx="7" ry="8"/>
-        </svg>
+        <!-- 演出の動き (跳ねる・沈む) はテンションの動きと重ねるため、内側の要素で動かす -->
+        <div class="buddy-motion">
+          <svg class="buddy-svg" viewBox="0 0 200 170" role="img" aria-label="メンダコ (仮)">
+            <ellipse class="fin" cx="52" cy="52" rx="18" ry="11"/>
+            <ellipse class="fin" cx="148" cy="52" rx="18" ry="11"/>
+            <path class="body" d="M20 135 C20 70 55 40 100 40 C145 40 180 70 180 135 C165 150 150 140 140 135 C125 152 112 145 100 138 C88 145 75 152 60 135 C50 140 35 150 20 135 Z"/>
+            <circle class="eye" cx="76" cy="92" r="7"/>
+            <circle class="eye" cx="124" cy="92" r="7"/>
+            <!-- Calm: 半目 (目の上半分をまぶたで隠す) -->
+            <g class="eyelids">
+              <path class="eyelid" d="M67 93 A9 9 0 0 1 85 93 Z"/>
+              <path class="eyelid" d="M115 93 A9 9 0 0 1 133 93 Z"/>
+              <path class="eyelid-line" d="M67 93 L85 93"/>
+              <path class="eyelid-line" d="M115 93 L133 93"/>
+            </g>
+            <!-- High とクリアの演出: キラキラ (目の中の光と、目のそばの星) -->
+            <g class="sparkles">
+              <circle class="eye-shine" cx="79" cy="89" r="2.5"/>
+              <circle class="eye-shine" cx="127" cy="89" r="2.5"/>
+              <path class="sparkle" d="M56 74 L58 80 L64 82 L58 84 L56 90 L54 84 L48 82 L54 80 Z"/>
+              <path class="sparkle" d="M144 74 L146 80 L152 82 L146 84 L144 90 L142 84 L136 82 L142 80 Z"/>
+            </g>
+            <!-- 死亡: しょんぼりした目 (下がった眉と涙) -->
+            <g class="eyes-sad">
+              <path class="brow" d="M64 82 L86 75"/>
+              <path class="brow" d="M114 75 L136 82"/>
+              <path class="tear" d="M72 101 C68 108 68 113 72 113 C76 113 76 108 72 101 Z"/>
+            </g>
+            <path class="mouth mouth-closed" d="M90 112 Q100 119 110 112"/>
+            <ellipse class="mouth mouth-open" cx="100" cy="115" rx="7" ry="8"/>
+          </svg>
+        </div>
       </div>
     </main>
   </body>
