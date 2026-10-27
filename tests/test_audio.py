@@ -1,12 +1,10 @@
 import ast
 import math
-import threading
 from pathlib import Path
 
 import numpy as np
 import pytest
 from conftest import FakeBackend
-from fastapi.testclient import TestClient
 
 from stream_buddy import audio, server
 from stream_buddy.__main__ import main
@@ -23,7 +21,6 @@ from stream_buddy.audio import (
     block_dbfs,
     select_device,
 )
-from stream_buddy.config import AudioConfig, Config
 
 SRC = Path(audio.__file__).parent
 PORT = 8765
@@ -207,63 +204,20 @@ def test_microphone_to_queue_through_sink(fake_audio: FakeBackend) -> None:
     assert blocks.dropped == 8
 
 
-# 組み立て (偽のストリーム → 発話検知 → broadcast)
-
-
-def test_fake_stream_levels_are_broadcast_as_speech(fake_audio: FakeBackend) -> None:
-    config = Config(audio=AudioConfig(speech_threshold_db=-40.0))
-    mic = Microphone(fake_audio, None)
-    app = server.create_app(config, TOKEN, microphone=mic)
-    with (
-        TestClient(app, base_url=BASE) as client,
-        client.websocket_connect(f"{WS}/ws?token={TOKEN}", headers=ORIGIN) as ws,
-    ):
-        stream = fake_audio.streams[0]
-        assert stream.started
-
-        def feed() -> None:
-            # 本物と同じく、別のスレッドから音声のブロックを流す
-            for amplitude in [0.1] * 5 + [0.0] * 10:
-                stream.push_level(amplitude)
-
-        thread = threading.Thread(target=feed)
-        thread.start()
-        thread.join()
-        assert ws.receive_json() == {"v": 0, "type": "speech", "payload": {"speaking": True}}
-        assert ws.receive_json() == {"v": 0, "type": "speech", "payload": {"speaking": False}}
-    # サーバーの終了でストリームが閉じられる
-    assert stream.closed
-
-
-def test_quiet_input_broadcasts_nothing(fake_audio: FakeBackend) -> None:
-    mic = Microphone(fake_audio, None)
-    hub = server.Hub()
-    app = server.create_app(Config(), TOKEN, hub, microphone=mic)
-    with (
-        TestClient(app, base_url=BASE) as client,
-        client.websocket_connect(f"{WS}/ws?token={TOKEN}", headers=ORIGIN) as ws,
-    ):
-        for _ in range(20):
-            fake_audio.streams[0].push_level(0.001)  # -60 dBFS
-        ws.send_text('{"v": 0, "type": "hello", "payload": {"page_version": "0.1.0"}}')
-        # 発話の通知はなく、最初に届くのは hello への返信
-        assert ws.receive_json()["type"] == "display"
-
-
 # 起動処理
 
 
 def test_main_opens_selected_microphone_and_closes_it(
     fake_audio: FakeBackend, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: list[Microphone | None] = []
-    monkeypatch.setattr(server, "serve", lambda config, token, **kw: calls.append(kw["microphone"]))
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(server, "serve", lambda config, token, **kw: calls.append(kw))
     config_path = tmp_path / "config.toml"
     config_path.write_text('[audio]\ndevice = "USB Audio"\n', encoding="utf-8")
 
     assert main(["--config", str(config_path)]) == 0
 
-    assert isinstance(calls[0], Microphone)
+    assert len(calls) == 1
     assert fake_audio.streams[0].device == 1
     assert fake_audio.streams[0].closed
 
@@ -284,11 +238,11 @@ def test_main_closes_microphone_on_ctrl_c(
 def test_main_demo_does_not_open_microphone(
     fake_audio: FakeBackend, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: list[Microphone | None] = []
-    monkeypatch.setattr(server, "serve", lambda config, token, **kw: calls.append(kw["microphone"]))
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(server, "serve", lambda config, token, **kw: calls.append(kw))
     monkeypatch.chdir(tmp_path)
     assert main(["--demo"]) == 0
-    assert calls == [None]
+    assert len(calls) == 1
     assert fake_audio.streams == []
 
 

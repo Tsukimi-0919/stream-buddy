@@ -315,9 +315,7 @@ def test_test_hotkeys_with_no_registered_key_exits_2(
     assert "F10（clear）はほかのアプリが使っている" in err
 
 
-def test_demo_and_normal_start_do_not_register_hotkeys(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_demo_does_not_register_hotkeys(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def fail(*_: object, **__: object) -> None:
         raise AssertionError("ホットキーを登録しない")
 
@@ -325,7 +323,6 @@ def test_demo_and_normal_start_do_not_register_hotkeys(
     monkeypatch.setattr(main_module.server, "serve", lambda *a, **kw: None)
     monkeypatch.chdir(tmp_path)
     assert main(["--demo"]) == 0
-    assert main([]) == 0
 
 
 def test_asyncio_receives_hotkey_via_call_soon_threadsafe() -> None:

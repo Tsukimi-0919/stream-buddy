@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -87,3 +88,43 @@ def no_real_model(
     missing = tmp_path_factory.mktemp("no-model") / "models" / keywords.MODEL_NAME
     monkeypatch.setattr(keywords, "default_model_dir", lambda: missing)
     return missing
+
+
+class FakeHotkeyApi:
+    """本物の RegisterHotKey の代わり。テストで F9 / F10 を実際に登録しないようにする。"""
+
+    def __init__(self) -> None:
+        self.registered: set[int] = set()
+        self.unregistered: list[int] = []
+        self._quit = threading.Event()
+
+    def register_hotkey(self, hotkey_id: int, modifiers: int, vk: int) -> int:
+        self.registered.add(hotkey_id)
+        return 0
+
+    def unregister_hotkey(self, hotkey_id: int) -> None:
+        self.unregistered.append(hotkey_id)
+
+    def get_message(self) -> tuple[int, int] | None:
+        self._quit.wait(5)
+        return None
+
+    def post_quit(self, thread_id: int) -> bool:
+        self._quit.set()
+        return True
+
+
+@pytest.fixture(autouse=True)
+def fake_hotkeys(monkeypatch: pytest.MonkeyPatch) -> list[FakeHotkeyApi]:
+    """すべてのテストで本物のホットキーを登録しない。作られた偽物の API の一覧を返す。"""
+    from stream_buddy import hotkey
+
+    made: list[FakeHotkeyApi] = []
+
+    def factory() -> FakeHotkeyApi:
+        api = FakeHotkeyApi()
+        made.append(api)
+        return api
+
+    monkeypatch.setattr(hotkey, "User32Api", factory)
+    return made

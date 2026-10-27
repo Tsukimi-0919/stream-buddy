@@ -137,7 +137,7 @@ class HotkeyListener:
         self,
         config: HotkeysConfig,
         on_hotkey: Callable[[EventKind], object],
-        api_factory: Callable[[], Win32Api] = User32Api,
+        api_factory: Callable[[], Win32Api] | None = None,
     ) -> None:
         self._keys: Mapping[int, tuple[EventKind, str]] = {
             1: ("death", config.death),
@@ -145,7 +145,8 @@ class HotkeyListener:
         }
         self._on_hotkey = on_hotkey
         # API の準備 (DLL の読み込み) はここで行い、失敗したら起動時に例外にする
-        self._api = api_factory()
+        # 既定は本物の User32Api。呼ぶときに決めるので、テストではモジュールの属性を差し替えられる
+        self._api = (api_factory or User32Api)()
         self._thread = threading.Thread(target=self._run, name="hotkeys", daemon=True)
         self._thread_id: int | None = None
         self._ready = threading.Event()
