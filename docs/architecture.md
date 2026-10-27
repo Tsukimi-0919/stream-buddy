@@ -60,9 +60,9 @@ Python バックエンドがすべての判断を行い、OBS のページは「
 | --- | --- |
 | `state/events.py` | 入力（`SpeechStarted`・`SpeechEnded`・`Keyword`・`Hotkey`・`Tick`）と出力（`Mouth`・`TensionChanged`・`Say`・`Effect`・`TensionPeak`）の型 |
 | `state/constants.py` | state-machine.md の数値（窓、しきい値、待ち時間、吹き出しの最短間隔など） |
-| `state/tension.py` | テンションの状態機械（ST-01〜ST-04） |
-| `state/silence.py` | 沈黙ハンター（ST-11〜ST-15） |
-| `state/event_fsm.py` | イベントの状態機械（ST-21〜ST-26）。演出中（演出開始から 3 秒）はすべての入力を無視し、キーワードの待ち時間は種類ごとに 5 秒（同じ種類の前回の演出開始から） |
+| `state/tension.py` | テンションの状態機械。遷移は [docs/state-machine.md](state-machine.md) を参照 |
+| `state/silence.py` | 沈黙ハンター。遷移は [docs/state-machine.md](state-machine.md) を参照 |
+| `state/event_fsm.py` | イベントの状態機械。遷移は [docs/state-machine.md](state-machine.md) を参照。演出中（演出開始から 3 秒）はすべての入力を無視し、キーワードの待ち時間は種類ごとに 5 秒（同じ種類の前回の演出開始から） |
 | `state/arbiter.py` | 出口：`Say` の優先順位と最短間隔 |
 | `state/brain.py` | 4 つをまとめる `Brain`。入力を各状態機械に配り、出力を出口に通して返す。状態機械どうしをつなぐのはここだけ |
 
