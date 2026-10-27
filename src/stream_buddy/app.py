@@ -33,19 +33,48 @@ from stream_buddy.protocol import (
 )
 from stream_buddy.state import constants
 from stream_buddy.state import events as ev
-from stream_buddy.state.brain import Brain
+from stream_buddy.state.brain import Brain, Snapshot
 
 MAX_QUEUE = 1000
 _DROP_WARNING_EVERY = 100
+# --debug で状態を表示する間隔
+DEBUG_INTERVAL_MS = 2_000
 
 type Clock = Callable[[], int]
 type Broadcast = Callable[[ServerMessage], Awaitable[None]]
+type DebugOut = Callable[[str], None]
 
 logger = logging.getLogger(__name__)
+
+_STATE_NAMES = {
+    "listening": "Listening",
+    "waiting": "Waiting",
+    "gave_up": "GaveUp",
+    "ready": "Ready",
+    "effecting": "Effecting",
+    "cooldown": "Cooldown",
+}
 
 
 def monotonic_ms() -> int:
     return int(time.monotonic() * 1000)
+
+
+def format_debug(snapshot: Snapshot) -> str:
+    """--debug の 1 行。数値と状態の名前だけを出す。
+
+    表示する補正は、四捨五入した盛り上がり度と話した割合の差にし、見た目の足し算が合うようにする。
+    """
+    score = round(snapshot.score)
+    speech = round(snapshot.speech_score)
+    bonus = score - speech
+    sign = "+" if bonus >= 0 else "-"
+    return (
+        f"[debug] 盛り上がり度 {score}（話した割合 {speech} {sign} 補正 {abs(bonus)}） "
+        f"{snapshot.tension}（{snapshot.since_change_ms / 1000:.1f} 秒前に変化） "
+        f"沈黙: {_STATE_NAMES[snapshot.silence_state]} {snapshot.silence_calls}回 "
+        f"イベント: {_STATE_NAMES[snapshot.event_state]}"
+    )
 
 
 class Engine:
@@ -59,12 +88,16 @@ class Engine:
         clock: Clock = monotonic_ms,
         rng: random.Random | None = None,
         max_queue: int = MAX_QUEUE,
+        debug: DebugOut | None = None,
     ) -> None:
+        """debug を渡すと、状態の確認用の行 ([debug] ...) をそこに出す (--debug)。"""
         self._silence_seconds = config.silence.seconds
         self._clock = clock
         self._picker = LinePicker(book, rng if rng is not None else random.Random())  # noqa: S311  セリフ選び (暗号用途ではない)
         self._max_queue = max_queue
+        self._debug = debug
         self.brain = Brain(start_ms=clock(), silence_seconds=self._silence_seconds)
+        self._debug_last_ms = clock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue[ev.Input] | None = None
         self.dropped = 0
@@ -76,6 +109,7 @@ class Engine:
         self._loop = loop
         self._queue = asyncio.Queue(maxsize=self._max_queue)
         self.brain = Brain(start_ms=self._clock(), silence_seconds=self._silence_seconds)
+        self._debug_last_ms = self._clock()
 
     def unbind(self) -> None:
         self._loop = None
@@ -117,10 +151,22 @@ class Engine:
 
     async def handle(self, event: ev.Input, broadcast: Broadcast) -> None:
         """1 つの入力を Brain に通し、出力をページに送る。時刻は取り出したときに付ける。"""
-        for output in self.brain.step(event, self._clock()):
+        now_ms = self._clock()
+        before = self.tension
+        for output in self.brain.step(event, now_ms):
             message = self.to_message(output)
             if message is not None:
                 await broadcast(message)
+        if self._debug is not None:
+            self._show_debug(self._debug, before, now_ms)
+
+    def _show_debug(self, out: DebugOut, before: ev.TensionLevel, now_ms: int) -> None:
+        """テンションが変わったときと、DEBUG_INTERVAL_MS ごとに 1 行出す。"""
+        if self.tension != before:
+            out(f"[debug] テンション {before} → {self.tension}")
+        if now_ms - self._debug_last_ms >= DEBUG_INTERVAL_MS:
+            self._debug_last_ms = now_ms
+            out(format_debug(self.brain.snapshot(now_ms)))
 
     def to_message(self, output: ev.Output) -> ServerMessage | None:
         match output:

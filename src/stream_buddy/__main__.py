@@ -54,6 +54,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="ホットキーだけを登録し、押されたキーの種類 (death / clear) を表示する",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="確認用に、盛り上がり度とテンションなどの状態を 2 秒ごとにコンソールに表示する",
+    )
     args = parser.parse_args(argv)
 
     if args.list_devices:
@@ -100,7 +105,7 @@ def _start(args: argparse.Namespace, config: Config) -> int:
         return 2
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    engine = app.Engine(config, book)
+    engine = app.Engine(config, book, debug=_print_debug if args.debug else None)
 
     # デモのときはマイクも音声認識もホットキーも使わず、偽の入力を Brain に入れる
     if args.demo:
@@ -177,6 +182,11 @@ def _print_url(args: argparse.Namespace, config: Config, token: str, *, created:
     print("OBS のブラウザソースに次の URL を設定してください:")
     print(server.overlay_url(config.server.port, token))
     print("この URL を配信画面に映さないでください。", flush=True)
+
+
+def _print_debug(line: str) -> None:
+    # 中身は app.format_debug などが作る、数値と状態の名前だけの行
+    print(line, flush=True)
 
 
 def _run_test_keywords(config: Config) -> int:

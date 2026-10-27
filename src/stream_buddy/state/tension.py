@@ -64,6 +64,14 @@ class Tension:
     def score(self, now_ms: int) -> float:
         """盛り上がり度 (0〜100)。直近の窓で話していた割合 * 100 + 補正。"""
         self._forget(now_ms)
+        speech, bonus = self.breakdown(now_ms)
+        return min(c.TENSION_MAX, max(c.TENSION_MIN, speech + bonus))
+
+    def breakdown(self, now_ms: int) -> tuple[float, float]:
+        """盛り上がり度の内訳 (話していた割合 * 100、補正の合計)。0〜100 に収める前の値。
+
+        状態は変えない (窓の外のものは 0 として数えるだけで、捨てない)。
+        """
         window_start = now_ms - c.TENSION_WINDOW_MS
         spoken = 0
         for start, end in self._spans:
@@ -71,9 +79,13 @@ class Tension:
             end_ms = now_ms if end is None else end
             spoken += max(0, end_ms - max(start, window_start))
         bonus = sum(b.value_at(now_ms) for b in self._bonuses)
-        # 割り算は最後に 1 回だけにし、しきい値ちょうどで誤差が出ないようにする
-        value = spoken * 100 / c.TENSION_WINDOW_MS + bonus
-        return min(c.TENSION_MAX, max(c.TENSION_MIN, value))
+        # 割り算は 1 回だけにし、しきい値ちょうどで誤差が出ないようにする
+        return spoken * 100 / c.TENSION_WINDOW_MS, bonus
+
+    @property
+    def last_change_ms(self) -> int:
+        """前回テンションが変わった時刻 (まだ変わっていなければ起動時刻)。"""
+        return self._last_change_ms
 
     @property
     def _speaking(self) -> bool:

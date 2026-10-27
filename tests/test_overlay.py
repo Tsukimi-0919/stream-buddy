@@ -156,3 +156,66 @@ def test_no_demo_without_option(client: TestClient) -> None:
         ws.send_text('{"v": 0, "type": "hello", "payload": {"page_version": "0.1.0"}}')
         # デモがなければ、最初に届くのは hello への返信
         assert ws.receive_json()["type"] == "display"
+
+
+# テンションの見た目と、確認用の表示 (debug=1)
+
+STYLE_CSS = (STATIC_DIR / "style.css").read_text(encoding="utf-8")
+INDEX_HTML = (Path(server.OVERLAY_DIR) / "index.html").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("level", ["calm", "normal", "high"])
+def test_style_css_has_look_for_each_tension(level: str) -> None:
+    rules = re.findall(rf'\.buddy\[data-tension="{level}"\][^{{]*\{{([^}}]*)\}}', STYLE_CSS)
+    assert any("animation:" in body for body in rules)
+
+
+def test_style_css_changes_color_and_eyes_by_tension() -> None:
+    # Calm は色と半目、High は色と光とキラキラ
+    assert '.buddy[data-tension="calm"] .body' in STYLE_CSS
+    assert '.buddy[data-tension="calm"] .eyelids' in STYLE_CSS
+    assert '.buddy[data-tension="high"] .body' in STYLE_CSS
+    assert '.buddy[data-tension="high"] .sparkles' in STYLE_CSS
+    assert "drop-shadow" in STYLE_CSS
+    assert "transition:" in STYLE_CSS
+
+
+def test_style_css_reduces_motion() -> None:
+    assert "@media (prefers-reduced-motion: reduce)" in STYLE_CSS
+    reduced = STYLE_CSS.split("@media (prefers-reduced-motion: reduce)")[1]
+    for level in ("calm", "normal", "high"):
+        assert f'.buddy[data-tension="{level}"]' in reduced
+
+
+def test_style_css_has_no_inline_or_external_style() -> None:
+    assert "<style" not in STYLE_CSS
+    assert "url(" not in STYLE_CSS
+
+
+def test_overlay_html_has_eye_shapes_for_each_tension() -> None:
+    checker = _PageChecker()
+    checker.feed(INDEX_HTML)
+    assert checker.problems == []  # インラインのスタイル・style 属性はない
+    assert 'class="eyelids"' in INDEX_HTML
+    assert 'class="sparkles"' in INDEX_HTML
+    assert 'id="debug-tension"' in INDEX_HTML
+
+
+def test_overlay_with_debug_param_is_served(client: TestClient) -> None:
+    response = client.get(f"/overlay?token={TOKEN}&debug=1")
+    assert response.status_code == 200
+    assert 'id="debug-tension" class="debug-tension" hidden' in response.text
+
+
+def test_app_js_shows_debug_tension_only_with_debug_1() -> None:
+    assert 'params.get("debug") === "1"' in APP_JS
+    assert "debugTension.textContent = level;" in APP_JS
+    # debug の表示に使うのは textContent と hidden だけ
+    uses = set(re.findall(r"debugTension\.(\w+)", APP_JS))
+    assert uses == {"textContent", "hidden"}
+
+
+def test_app_js_does_not_rewrite_svg() -> None:
+    # 目の形は style.css で切り替える。JavaScript で SVG の要素を作ったり書き換えたりしない
+    for forbidden in ("createElement", "setAttribute", "appendChild", ".style"):
+        assert forbidden not in APP_JS

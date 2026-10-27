@@ -14,14 +14,26 @@
   const buddy = document.getElementById("buddy");
   const bubble = document.getElementById("bubble");
   const bubbleText = document.getElementById("bubble-text");
+  const debugTension = document.getElementById("debug-tension");
 
-  const token = new URLSearchParams(window.location.search).get("token") || "";
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token") || "";
+  // 確認用: debug=1 のときだけ、受け取ったテンションの名前を隅に出す
+  const debug = params.get("debug") === "1";
   const socketUrl =
     "ws://127.0.0.1:" + window.location.port + "/ws?token=" + encodeURIComponent(token);
 
   // 表示
 
   let sayTimer = null;
+
+  function setTension(level) {
+    buddy.dataset.tension = level;
+    if (debug) {
+      debugTension.textContent = level;
+      debugTension.hidden = false;
+    }
+  }
 
   function setSpeaking(speaking) {
     buddy.classList.toggle("is-speaking", speaking);
@@ -74,9 +86,7 @@
       {
         keys: ["level"],
         valid: (p) => ["calm", "normal", "high"].includes(p.level),
-        apply: (p) => {
-          buddy.dataset.tension = p.level;
-        },
+        apply: (p) => setTension(p.level),
       },
     ],
     [
