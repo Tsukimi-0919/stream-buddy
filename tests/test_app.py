@@ -293,6 +293,9 @@ class FakeRecognizer:
     def Result(self) -> str:
         return json.dumps({"text": "死ん だ"})
 
+    def PartialResult(self) -> str:
+        return json.dumps({"partial": ""})
+
 
 class FakeModel:
     def has_word(self, word: str) -> bool:

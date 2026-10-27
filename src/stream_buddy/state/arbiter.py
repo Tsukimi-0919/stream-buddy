@@ -4,7 +4,7 @@ from stream_buddy.state import constants as c
 from stream_buddy.state.events import Output, Say, Situation
 
 # 小さいほど優先度が高い
-PRIORITY: dict[Situation, int] = {"death": 1, "clear": 1, "high": 2, "silence": 3}
+PRIORITY: dict[Situation, int] = {"death": 1, "clear": 1, "high": 2, "cheer": 2, "silence": 3}
 # 前の吹き出しからの間隔に関係なく出すもの
 ALWAYS: frozenset[Situation] = frozenset({"death", "clear"})
 

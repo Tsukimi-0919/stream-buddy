@@ -1,4 +1,4 @@
-"""テンションの状態機械 (ST-01〜ST-04、FR-04)。"""
+"""テンションの状態機械 (ST-01〜ST-05、FR-04)。"""
 
 from dataclasses import dataclass
 
@@ -42,6 +42,8 @@ class Tension:
         # 話していた区間 (開始, 終了)。終了が None なら話している最中
         self._spans: list[tuple[int, int | None]] = []
         self._bonuses: list[_Bonus] = []
+        # ST-05 の 15 秒を数え始めた時刻 (High に入った時刻か、前回の Say(cheer) の時刻)
+        self._cheer_from_ms = start_ms
 
     def step(self, event: TensionInput, now_ms: int) -> list[Output]:
         match event:
@@ -83,6 +85,12 @@ class Tension:
         self._bonuses = [b for b in self._bonuses if now_ms - b.start_ms < c.BONUS_DECAY_MS]
 
     def _judge(self, now_ms: int) -> list[Output]:
+        outputs = self._change_level(now_ms)
+        if not outputs and self.level == "high":
+            outputs = self._cheer(now_ms)
+        return outputs
+
+    def _change_level(self, now_ms: int) -> list[Output]:
         if now_ms - self._last_change_ms < c.TENSION_HOLD_MS:
             return []
         value = self.score(now_ms)
@@ -92,10 +100,18 @@ class Tension:
             case "normal" if value < c.NORMAL_TO_CALM:
                 return self._change("calm", now_ms)  # ST-02
             case "normal" if value >= c.NORMAL_TO_HIGH:
+                self._cheer_from_ms = now_ms  # ST-05 は High に入ったときから数える
                 return [*self._change("high", now_ms), TensionPeak(), Say("high")]  # ST-03
             case "high" if value < c.HIGH_TO_NORMAL:
                 return self._change("normal", now_ms)  # ST-04
         return []
+
+    def _cheer(self, now_ms: int) -> list[Output]:
+        # ST-05。出口で捨てられても言ったものとして数え直す (後で出し直さない)
+        if now_ms - self._cheer_from_ms < c.CHEER_INTERVAL_MS:
+            return []
+        self._cheer_from_ms = now_ms
+        return [Say("cheer")]
 
     def _change(self, level: TensionLevel, now_ms: int) -> list[Output]:
         self.level = level

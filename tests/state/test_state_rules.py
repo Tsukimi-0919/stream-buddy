@@ -25,7 +25,7 @@ def test_state_package_has_no_forbidden_imports() -> None:
 
 def test_every_transition_id_has_a_test() -> None:
     ids = sorted(set(re.findall(r"ST-(\d{2})", SPEC.read_text(encoding="utf-8"))))
-    assert len(ids) == 14  # ST-01〜04、ST-11〜15、ST-21〜25
+    assert len(ids) == 15  # ST-01〜05、ST-11〜15、ST-21〜25
 
     names: list[str] = []
     for path in TESTS_DIR.glob("test_*.py"):

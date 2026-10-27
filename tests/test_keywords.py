@@ -6,6 +6,7 @@ import json
 import re
 import sys
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -238,38 +239,58 @@ def test_judge(text: str, kind: str | None) -> None:
     assert GRAMMAR.judge(text) == kind
 
 
-class FakeRecognizer:
-    """偽の Vosk。用意した結果を、AcceptWaveform が True を返すたびに順に返す。"""
+@dataclass(frozen=True)
+class Partial:
+    """FakeRecognizer に渡す部分結果 (最終結果は出ない)。"""
 
-    def __init__(self, results: list[str | None]) -> None:
+    text: str
+
+
+class FakeRecognizer:
+    """偽の Vosk。1 ブロックごとに、用意した結果を順に返す。
+
+    文字列は最終結果 (AcceptWaveform が True)、Partial は部分結果、None は空の部分結果。
+    """
+
+    def __init__(self, results: list[str | Partial | None]) -> None:
         self.results = list(results)
         self.received: list[bytes] = []
         self._current = ""
+        self._partial = ""
 
     def AcceptWaveform(self, data: bytes) -> bool:
         self.received.append(data)
         result = self.results.pop(0) if self.results else None
-        if result is None:
-            return False
-        self._current = result
-        return True
+        if isinstance(result, str):
+            self._current = result
+            self._partial = ""
+            return True
+        self._partial = result.text if result is not None else ""
+        return False
 
     def Result(self) -> str:
         return self._current
+
+    def PartialResult(self) -> str:
+        return json.dumps({"partial": self._partial}, ensure_ascii=False)
 
 
 def block(value: float = 0.1) -> np.ndarray:
     return np.full(BLOCK_SIZE, value, dtype=np.float32)
 
 
-def test_spotter_judges_only_final_results() -> None:
-    recognizer = FakeRecognizer(
-        [None, json.dumps({"text": "死ん だ"}), json.dumps({"text": "クリーム"})]
-    )
+def final(text: str) -> str:
+    return json.dumps({"text": text}, ensure_ascii=False)
+
+
+def feed_all(spotter: KeywordSpotter, times_ms: list[int]) -> list[str | None]:
+    return [spotter.feed(block(), now) for now in times_ms]
+
+
+def test_spotter_judges_final_results() -> None:
+    recognizer = FakeRecognizer([None, final("死ん だ"), final("クリーム")])
     spotter = KeywordSpotter(recognizer, GRAMMAR)
-    assert spotter.feed(block()) is None  # 途中
-    assert spotter.feed(block()) == "death"
-    assert spotter.feed(block()) is None  # おとり
+    assert feed_all(spotter, [0, 30, 60]) == [None, "death", None]  # 途中、検知、おとり
     # Vosk には 16 bit の PCM で渡す
     assert len(recognizer.received[0]) == BLOCK_SIZE * 2
 
@@ -277,7 +298,69 @@ def test_spotter_judges_only_final_results() -> None:
 @pytest.mark.parametrize("result", ["[]", '{"text": 1}', "{}", '"死ん だ"'])
 def test_spotter_ignores_unexpected_results(result: str) -> None:
     spotter = KeywordSpotter(FakeRecognizer([result]), GRAMMAR)
-    assert spotter.feed(block()) is None
+    assert spotter.feed(block(), 0) is None
+
+
+@pytest.mark.parametrize("result", ["[]", '{"partial": 1}', "{}", '"死ん だ"'])
+def test_spotter_ignores_unexpected_partial_results(result: str) -> None:
+    recognizer = FakeRecognizer([None, None])
+    recognizer.PartialResult = lambda: result  # type: ignore[method-assign]
+    spotter = KeywordSpotter(recognizer, GRAMMAR)
+    assert feed_all(spotter, [0, 1_000]) == [None, None]
+
+
+# 部分結果
+
+
+def test_partial_keyword_held_150ms_is_detected() -> None:
+    spotter = KeywordSpotter(FakeRecognizer([Partial("やったー")] * 3), GRAMMAR)
+    assert feed_all(spotter, [1_000, 1_100, 1_150]) == [None, None, "clear"]
+    assert keywords.PARTIAL_HOLD_MS == 150
+
+
+def test_partial_keyword_held_149ms_is_not_detected() -> None:
+    spotter = KeywordSpotter(FakeRecognizer([Partial("死ん だ")] * 2), GRAMMAR)
+    assert feed_all(spotter, [1_000, 1_149]) == [None, None]
+
+
+def test_partial_that_changes_midway_is_not_detected() -> None:
+    # 途中の結果で一瞬「やったー」に見えても、「やっぱり」に変われば反応しない
+    results = [Partial("やったー"), Partial("やったー"), Partial("やっぱり"), Partial("やっぱり")]
+    spotter = KeywordSpotter(FakeRecognizer([*results, final("やっぱり")]), GRAMMAR)
+    assert feed_all(spotter, [0, 100, 140, 400, 430]) == [None] * 5
+
+
+def test_partial_count_restarts_after_change() -> None:
+    results = [Partial("やったー"), Partial("[unk]"), Partial("やったー"), Partial("やったー")]
+    spotter = KeywordSpotter(FakeRecognizer(results), GRAMMAR)
+    # 判定が変わったら、また同じ判定になってから 150 ms を数え直す
+    assert feed_all(spotter, [0, 100, 200, 350]) == [None, None, None, "clear"]
+
+
+def test_partial_with_decoy_is_not_detected() -> None:
+    spotter = KeywordSpotter(FakeRecognizer([Partial("クリーム クリア")] * 3), GRAMMAR)
+    assert feed_all(spotter, [0, 150, 300]) == [None, None, None]
+
+
+def test_partial_detection_is_once_per_utterance() -> None:
+    results = [Partial("死ん だ")] * 4 + [final("死ん だ")]
+    spotter = KeywordSpotter(FakeRecognizer(results), GRAMMAR)
+    # 部分結果で 1 回検知したら、その発話の最終結果でも、続く部分結果でも検知しない
+    assert feed_all(spotter, [0, 150, 300, 450, 480]) == [None, "death", None, None, None]
+
+
+def test_next_utterance_is_judged_after_final() -> None:
+    results = [Partial("死ん だ"), Partial("死ん だ"), final("死ん だ")]
+    results += [Partial("やったー"), Partial("やったー")]
+    spotter = KeywordSpotter(FakeRecognizer(results), GRAMMAR)
+    # 最終結果で発話が区切られ、次の発話はまた検知できる
+    assert feed_all(spotter, [0, 150, 200, 1_000, 1_150]) == [None, "death", None, None, "clear"]
+
+
+def test_utterance_not_detected_by_partial_is_judged_by_final() -> None:
+    # 部分結果では 150 ms 続かなかった発話も、最終結果で検知する
+    spotter = KeywordSpotter(FakeRecognizer([Partial("やったー"), final("やったー")]), GRAMMAR)
+    assert feed_all(spotter, [0, 30]) == [None, "clear"]
 
 
 def test_listener_calls_on_keyword_from_thread() -> None:
@@ -298,6 +381,26 @@ def test_listener_calls_on_keyword_from_thread() -> None:
     listener.stop()
     assert found == ["clear"]
     assert blocks.size() == 0
+
+
+def test_listener_uses_given_clock_for_partial_results() -> None:
+    spotter = KeywordSpotter(FakeRecognizer([Partial("やったー")] * 2), GRAMMAR)
+    blocks = BlockQueue()
+    found: list[str] = []
+    done = threading.Event()
+    times = iter([0, 150])
+
+    def on_keyword(kind: str) -> None:
+        found.append(kind)
+        done.set()
+
+    listener = KeywordListener(spotter, blocks, on_keyword, clock=lambda: next(times))
+    listener.start()
+    blocks.offer(block())
+    blocks.offer(block())
+    assert done.wait(5.0)
+    listener.stop()
+    assert found == ["clear"]
 
 
 # 準備
@@ -391,7 +494,7 @@ def test_prepare_builds_grammar(tmp_path: Path) -> None:
     config = KeywordsConfig(model_dir=str(model))
     setup = prepare_keywords(config, load_model=lambda _: fake, expected=expected)
     assert setup is not None
-    assert setup.spotter().feed(block()) == "death"
+    assert setup.spotter().feed(block(), 0) == "death"
     assert "死ん だ" in json.loads(fake.grammars[0])
 
 
@@ -508,21 +611,60 @@ def test_test_keywords_prints_only_kind(
 
     def fake_print(*args: object, **_: object) -> None:
         printed.append(" ".join(str(a) for a in args))
-        if args == ("death",):
+        if re.fullmatch(r"death \(-?\d+ ms\)", printed[-1]):
             raise KeyboardInterrupt  # 1 つ検知したら Ctrl+C の代わりに止める
 
     def start(self: FakeStream) -> None:
         self.started = True
-        self.push(block())
-        self.push(block())
+        # 話して (2 ブロック)、黙る (話し終わりになるまで)
+        for _ in range(2):
+            self.push(block())
+        for _ in range(12):
+            self.push(block(0.0))
 
     monkeypatch.setattr(main_module, "print", fake_print, raising=False)
     monkeypatch.setattr(FakeStream, "start", start)
     assert main(["--test-keywords", "--config", str(tmp_path / "none.toml")]) == 0
-    assert "death" in printed
+    assert any(line.startswith("death (") for line in printed)
     # 認識した文字列は表示しない
     assert not any("死ん" in line for line in printed)
     assert fake_audio.streams[0].closed
+
+
+# --test-keywords の時間の表示 (偽の時計の時刻を渡す)
+
+
+def test_reaction_after_speech_ended_is_positive() -> None:
+    timer = main_module.ReactionTimer()
+    assert timer.speech(speaking=True, now_ms=1_000) == []
+    assert timer.speech(speaking=False, now_ms=2_000) == []
+    assert timer.keyword("clear", 2_250) == ["clear (250 ms)"]
+
+
+def test_reaction_before_speech_ended_waits_and_is_negative() -> None:
+    timer = main_module.ReactionTimer()
+    timer.speech(speaking=True, now_ms=1_000)
+    # 話している間に (部分結果で) 検知したら、話し終わるまで表示を待つ
+    assert timer.keyword("clear", 1_880) == []
+    assert timer.speech(speaking=False, now_ms=2_000) == ["clear (-120 ms)"]
+    # 表示したものは次の話し終わりでは出さない
+    timer.speech(speaking=True, now_ms=3_000)
+    assert timer.speech(speaking=False, now_ms=4_000) == []
+
+
+def test_reaction_counts_from_latest_speech_end() -> None:
+    timer = main_module.ReactionTimer()
+    timer.speech(speaking=True, now_ms=0)
+    timer.speech(speaking=False, now_ms=1_000)
+    timer.speech(speaking=True, now_ms=2_000)
+    timer.speech(speaking=False, now_ms=3_000)
+    assert timer.keyword("death", 3_400) == ["death (400 ms)"]
+
+
+def test_reaction_without_speech_end() -> None:
+    # 音量が発話のしきい値に届かず、話し終わりを検出していないとき
+    timer = main_module.ReactionTimer()
+    assert timer.keyword("death", 500) == ["death (話し終わりを検出していません)"]
 
 
 # プライバシー (文字列・構文の検査)

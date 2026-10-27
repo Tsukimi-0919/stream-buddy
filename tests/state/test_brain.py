@@ -66,7 +66,7 @@ def test_scenario_st01_st03_st04_st02_st13_talk_clear_high_then_silence() -> Non
     ]
     assert sim.of(TensionPeak) == [(16_100, TensionPeak())]
     assert sim.of(Effect) == [(16_000, Effect("clear"))]
-    # Say(high) はクリアの吹き出しから 5 秒たっていないので捨てられる。
+    # Say(high) はクリアの吹き出しから 3 秒たっていないので捨てられる。
     # 沈黙は 15 秒から数え、演出中の 3 秒 (16〜19 秒) を除いて 20 秒を超えた 38.1 秒で話しかける
     assert sim.of(Say) == [(16_000, Say("clear")), (38_100, Say("silence"))]
 

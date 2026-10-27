@@ -63,10 +63,24 @@ def load_error(tmp_path: Path, text: str) -> str:
 def test_default_lines_are_valid_and_complete() -> None:
     book = load_lines()
     assert set(book.lists) == set(ALL_LISTS)
-    # silence の calm / normal / high、tension の high、event の death / clear
-    assert len(ALL_LISTS) == 6
+    # silence の calm / normal / high、tension の high / cheer、event の death / clear
+    assert len(ALL_LISTS) == 7
+    assert ("tension", "cheer") in ALL_LISTS
     for key in ALL_LISTS:
         assert book.get(*key)
+
+
+def test_default_cheer_lines_are_valid_say_payloads() -> None:
+    lines = load_lines().get("tension", "cheer")
+    assert len(lines) == 5
+    for index, text in enumerate(lines):
+        SayPayload(line_id=line_id("tension", "cheer", index), text=text)
+
+
+def test_missing_cheer_is_error(tmp_path: Path) -> None:
+    # T-13 より前に作った自分のセリフ集には cheer がない。足りない場所を示して起動しない
+    lists = {k: v for k, v in valid_lists().items() if k != ("tension", "cheer")}
+    assert "[tension] cheer がありません" in load_error(tmp_path, toml_text(lists))
 
 
 def test_default_lines_are_valid_say_payloads() -> None:
@@ -306,6 +320,10 @@ def test_silence_uses_list_for_tension(tension: str) -> None:
 def test_situations_map_to_lists() -> None:
     picker = LinePicker(book_of())
     assert picker.pick("high", "calm")[0].startswith("tension.high.")
+    assert picker.pick("cheer", "high") in {
+        ("tension.cheer.1", "tension-cheer-1"),
+        ("tension.cheer.2", "tension-cheer-2"),
+    }
     assert picker.pick("death", "high")[0].startswith("event.death.")
     assert picker.pick("clear", "high")[0].startswith("event.clear.")
 

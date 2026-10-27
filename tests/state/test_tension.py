@@ -1,5 +1,7 @@
+from stream_buddy.state.arbiter import Arbiter
 from stream_buddy.state.events import (
     Effect,
+    Output,
     Say,
     SpeechEnded,
     SpeechStarted,
@@ -113,9 +115,9 @@ def test_st03_not_within_5s_of_change() -> None:
 
 def test_st04_high_to_normal() -> None:
     t = to_high()
-    # 36 秒で 15 秒 = 50 (しきい値ちょうど) は変わらない
+    # 36 秒で 15 秒 = 50 (しきい値ちょうど) は変わらない (High のままなので ST-05 は出る)
     assert t.score(36_000) == 50
-    assert t.step(Tick(), 36_000) == []
+    assert t.step(Tick(), 36_000) == [Say("cheer")]
     assert t.step(Tick(), 36_100) == [TensionChanged("normal")]
 
 
@@ -167,3 +169,82 @@ def test_only_tick_judges() -> None:
     assert t.step(SpeechEnded(), 20_000) == []
     assert t.step(Effect("clear"), 20_000) == []
     assert t.level == "calm"
+
+
+# ST-05: High の間の盛り上げセリフ
+
+
+def high_while_speaking() -> Tension:
+    """0 秒から話し続け、21 秒で High にしたもの (話し続けるので High のまま)。"""
+    t = Tension(start_ms=0)
+    t.step(SpeechStarted(), 0)
+    t.step(Tick(), 10_500)
+    assert t.step(Tick(), 21_000)[0] == TensionChanged("high")
+    return t
+
+
+def run_ticks(t: Tension, start_ms: int, end_ms: int) -> list[tuple[int, Output]]:
+    """start_ms から end_ms まで 100 ms ごとに tick を入れ、出力を時刻つきで返す。"""
+    return [
+        (now, output) for now in range(start_ms, end_ms + 1, 100) for output in t.step(Tick(), now)
+    ]
+
+
+def test_st05_cheer_every_15s_while_high() -> None:
+    t = high_while_speaking()
+    assert t.step(Tick(), 35_999) == []
+    assert t.step(Tick(), 36_000) == [Say("cheer")]  # High に入ってから 15 秒
+    assert run_ticks(t, 36_100, 51_000) == [(51_000, Say("cheer"))]  # 前回から 15 秒で 2 回目
+    assert t.level == "high"
+
+
+def test_st05_stops_after_leaving_high() -> None:
+    t = high_while_speaking()
+    outputs = run_ticks(t, 21_100, 55_000)
+    t.step(SpeechEnded(), 55_000)
+    outputs += run_ticks(t, 55_100, 70_100)
+    assert outputs == [
+        (36_000, Say("cheer")),
+        (51_000, Say("cheer")),
+        (66_000, Say("cheer")),
+        (70_100, TensionChanged("normal")),  # ST-04
+    ]
+    # Normal (とその先の Calm) の間は言わない
+    assert Say("cheer") not in run_ticks_outputs(t, 70_200, 150_000)
+
+
+def test_st05_count_restarts_on_entering_high_again() -> None:
+    t = high_while_speaking()
+    run_ticks(t, 21_100, 40_000)  # 36 秒に 1 回言う
+    t.step(SpeechEnded(), 40_000)
+    run_ticks(t, 40_100, 60_000)
+    assert t.level == "normal"
+    t.step(SpeechStarted(), 60_000)
+    outputs = run_ticks(t, 60_100, 120_000)
+    entered = [now for now, o in outputs if o == TensionChanged("high")]
+    assert len(entered) == 1
+    cheers = [now for now, o in outputs if o == Say("cheer")]
+    # 前の High のときからではなく、入り直したときから 15 秒ごとに数える
+    assert cheers[:2] == [entered[0] + 15_000, entered[0] + 30_000]
+
+
+def test_st05_not_on_same_tick_as_st04() -> None:
+    # 15 秒たったのと同じ tick で High を出るなら、盛り上げセリフは言わない
+    t = to_high()  # 21 秒で High。そこから黙っている
+    assert t.score(36_100) < 50
+    assert t.step(Tick(), 36_100) == [TensionChanged("normal")]
+
+
+def test_st05_cheer_within_3s_is_dropped_and_not_retried() -> None:
+    t = high_while_speaking()
+    arbiter = Arbiter()
+    arbiter.filter([Say("clear")], 34_000)
+    # 前の吹き出しから 2 秒なので出口で捨てる
+    assert arbiter.filter(t.step(Tick(), 36_000), 36_000) == []
+    # 捨てられても出し直さず、次は捨てられた時刻から 15 秒後
+    assert arbiter.filter(run_ticks_outputs(t, 36_100, 50_900), 50_900) == []
+    assert arbiter.filter(t.step(Tick(), 51_000), 51_000) == [Say("cheer")]
+
+
+def run_ticks_outputs(t: Tension, start_ms: int, end_ms: int) -> list[Output]:
+    return [o for _, o in run_ticks(t, start_ms, end_ms)]

@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 2：T-12 の組み立てまで実装。Phase 2 のゲート（OBS での手動確認）待ち**
+**Phase 2：T-13 の反応の調整まで実装。手動確認（`--test-keywords` と OBS）待ち**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -124,6 +124,15 @@ Phase 0（設計と守りの準備）は完了。
   - `server.py`：デモとマイクを直接扱う経路をやめ、`Runtime` を lifespan の中で動かす。`hello` には `display` と今の `tension` を返す
   - `--demo`：偽の入力（`demo.py` の流れ。話して High → ホットキーでクリア → 黙って沈黙ハンター → キーワードで死亡、既定で約 1 分）を状態機械に入れる。マイク・Vosk・ホットキーは使わない
   - `hotkey.py`：`HotkeyListener` の Win32 API の既定を呼ぶときに決めるようにした（テストで本物のホットキーを登録しないため）
+
+- T-13：反応の調整（Phase 2 のゲートで「セリフの間隔とキーワードの反応が遅い」とわかったため）
+  - 吹き出しの最短間隔を 5 秒 → 3 秒にした（`state/constants.py` の `SAY_MIN_INTERVAL_MS`）
+  - ST-05：High の間、High に入ってから（または前回の `Say(cheer)` から）15 秒ごとに `Say(cheer)` を出す（`CHEER_INTERVAL_MS`）。判定は `Tick` のたび。出口での優先度は `high` と同じ 2
+    - 出口で捨てられても言ったものとして数え直す。ST-04 と同じ tick なら ST-04 を優先して言わない（state-machine.md の補足 9・10）
+  - セリフ集に `[tension] cheer`（5 個）を追加し、必須のリストが 7 つになった。`cheer` のない自分のセリフ集は「[tension] cheer がありません」で起動しない（`config.example.toml` に追記）
+  - キーワードを Vosk の部分結果（`PartialResult`）でも判定する。同じ種類の判定が 150 ms（`keywords.PARTIAL_HOLD_MS`）続いたら検知。1 つの発話（最終結果で区切る）につき 1 回まで。部分結果で検知しなかった発話は最終結果で判定する。時刻は `KeywordListener` の `clock` で差し替えられる
+  - `--test-keywords` は、話し終わり（`detect` の `SpeechEnded`）から検知までの時間を `clear (-120 ms)` のように添える。話し終わる前の検知は、話し終わるまで表示を待って負の値で示す。認識した文字列は出さない
+  - 手動確認（`--test-keywords` での検知までの時間・誤検知、OBS での盛り上げセリフと間隔）は未実施
 
 ## まだないもの
 
