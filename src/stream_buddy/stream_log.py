@@ -7,6 +7,7 @@
 - 書く前に resolve() で正規化し、ファイルが output_dir の直下にあることを確かめる
 - ファイルは新規作成専用 ("x") で開き、上書きしない。output_dir のフォルダは作らない
 - できごとのたびに 1 行書いて flush する (途中で落ちても、そこまでの行が残る)
+- 起動をやめたとき、できごとが 1 行もなければ、この起動で作ったファイルだけを消す
 """
 
 import logging
@@ -60,19 +61,27 @@ class StreamLog:
         self,
         file: IO[str],
         *,
+        path: Path,
+        output_dir: Path,
         include_keyword: bool,
         started: datetime,
         now: WallClock,
         monotonic: Monotonic,
     ) -> None:
-        """started は起動した日時 (ファイル名と同じ)。経過はここで読んだ monotonic から数える。"""
+        """started は起動した日時 (ファイル名と同じ)。経過はここで読んだ monotonic から数える。
+
+        path はこの起動で作ったファイル、output_dir はそれを置いたフォルダ (abandon で使う)。
+        """
         self._file = file
+        self._path = path
+        self._output_dir = output_dir
         self._include_keyword = include_keyword
         self._now = now
         self._monotonic = monotonic
         self._started = started
         self._started_mono = monotonic()
         self._counts = {_PEAK: 0, **{name: 0 for name in _EFFECT_NAMES.values()}}
+        self._rows = 0
         self._closed = False
         self._warned = False
         self._write(self._header())
@@ -109,6 +118,7 @@ class StreamLog:
         if self._closed:
             return
         self._counts[counted] += 1
+        self._rows += 1
         elapsed = _clock_text(self._monotonic() - self._started_mono, width=2)
         self._write(f"| {elapsed} | {self._now():%H:%M:%S} | {_cell(text)} |\n")
 
@@ -130,6 +140,28 @@ class StreamLog:
             )
         finally:
             self._file.close()
+
+    def abandon(self) -> None:
+        """起動をやめたときに呼ぶ。できごとが 1 行もなければ、この起動で作ったファイルを消す。
+
+        1 行でも書いていれば close と同じ (まとめを書いて残す)。消せなくても警告だけにする。
+        """
+        if self._closed:
+            return
+        if self._rows > 0:
+            self.close()
+            return
+        self._closed = True
+        self._file.close()
+        try:
+            # SR-06: 消すのも、作ったときのパスが output_dir の直下にあるときだけ
+            if self._path.resolve().parent != self._output_dir.resolve():
+                logger.warning("配信ログが output_dir の直下にないため、消しませんでした")
+                return
+            self._path.unlink()
+        except OSError:
+            # パスは出さない
+            logger.warning("起動をやめたため配信ログを消そうとしましたが、消せませんでした")
 
     def _write(self, text: str) -> None:
         try:
@@ -180,6 +212,8 @@ def open_stream_log(
             ) from None
         return StreamLog(
             file,
+            path=path,
+            output_dir=root,
             include_keyword=config.include_keyword,
             started=started,
             now=now,

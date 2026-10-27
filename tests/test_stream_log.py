@@ -463,6 +463,114 @@ def test_main_writes_summary_when_server_stops_with_error(
     assert read(only_file(folder)).endswith("- クリア：0 回\n")
 
 
+# 起動をやめたとき (abandon)
+
+
+def write_log_config(tmp_path: Path, folder: Path, extra: str = "") -> Path:
+    config = tmp_path / "config.toml"
+    escaped = str(folder).replace("\\", "\\\\")
+    config.write_text(f'{extra}[log]\nenabled = true\noutput_dir = "{escaped}"\n', encoding="utf-8")
+    return config
+
+
+def test_main_startup_failure_leaves_no_new_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    calls: list[object] = []
+    monkeypatch.setattr(server, "serve", lambda *a, **kw: calls.append(kw))
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "logs"
+    folder.mkdir()
+    previous = folder / "stream-buddy-2026-10-26-210000.md"
+    previous.write_text("前回の配信", encoding="utf-8")
+    other = folder / "メモ.md"
+    other.write_text("ほかのメモ", encoding="utf-8")
+    # マイクが見つからないので、ログのファイルを作ったあとで起動をやめる
+    config = write_log_config(tmp_path, folder, '[audio]\ndevice = "Blue Yeti"\n\n')
+    assert main(["--config", str(config)]) == 2
+    assert calls == []
+    # 作ったファイルだけが消え、前回のログやほかのファイルは残る
+    assert {p.name for p in folder.iterdir()} == {previous.name, other.name}
+    assert previous.read_text(encoding="utf-8") == "前回の配信"
+    assert other.read_text(encoding="utf-8") == "ほかのメモ"
+    assert "配信ログ" not in caplog.text  # 消せたので警告は出ない
+
+
+def test_abandon_removes_only_own_file_when_no_events(tmp_path: Path) -> None:
+    (tmp_path / FIRST_NAME).write_text("前回の配信", encoding="utf-8")
+    log = open_log(tmp_path, FakeClock())  # 同じ名前があるので -2 を作る
+    assert (tmp_path / "stream-buddy-2026-10-27-200012-2.md").exists()
+    log.abandon()
+    assert [p.name for p in tmp_path.iterdir()] == [FIRST_NAME]
+    assert (tmp_path / FIRST_NAME).read_text(encoding="utf-8") == "前回の配信"
+
+
+def test_abandon_keeps_file_with_an_event(tmp_path: Path) -> None:
+    log = open_log(tmp_path, FakeClock())
+    log.effect("death")
+    log.abandon()
+    text = read(only_file(tmp_path))
+    assert [row[2] for row in rows(text)] == ["死亡"]
+    assert "- 死亡：1 回\n" in text  # close と同じく、まとめを書いて残す
+
+
+def test_abandon_after_close_does_nothing(tmp_path: Path) -> None:
+    log = open_log(tmp_path, FakeClock())
+    log.close()
+    log.abandon()
+    assert "## まとめ" in read(only_file(tmp_path))
+
+
+def test_abandon_only_warns_when_delete_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    log = open_log(tmp_path, FakeClock())
+
+    def deny(*_: object, **__: object) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "unlink", deny)
+    log.abandon()  # 例外にしない
+    assert only_file(tmp_path).name == FIRST_NAME
+    assert "消せませんでした" in caplog.text
+    assert str(tmp_path) not in caplog.text
+
+
+def test_abandon_does_not_delete_outside_output_dir(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # 作ったときのパスが output_dir の直下でなければ、消さない
+    folder = tmp_path / "logs"
+    folder.mkdir()
+    outside = tmp_path / "outside.md"
+    log = StreamLog(
+        outside.open("x", encoding="utf-8", newline="\n"),
+        path=outside,
+        output_dir=folder,
+        include_keyword=False,
+        started=START,
+        now=FakeClock().now,
+        monotonic=FakeClock().monotonic,
+    )
+    log.abandon()
+    assert outside.exists()
+    assert "消しませんでした" in caplog.text
+
+
+def test_main_success_keeps_log_without_events(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 起動できて終わったときは、できごとがなくてもまとめを書いて残す
+    monkeypatch.setattr(server, "serve", lambda *a, **kw: None)
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "logs"
+    folder.mkdir()
+    assert main(["--config", str(write_log_config(tmp_path, folder))]) == 0
+    text = read(only_file(folder))
+    assert rows(text) == []
+    assert "- 配信時間：" in text
+
+
 # 設定
 
 

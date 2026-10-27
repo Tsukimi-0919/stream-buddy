@@ -98,11 +98,19 @@ def _start(args: argparse.Namespace, config: Config) -> int:
         print(e, file=sys.stderr)
         return 2
     try:
-        return _run(args, config, book, log)
-    finally:
+        code = _run(args, config, book, log)
+    except BaseException:
         # Ctrl+C や例外で終わっても、まとめを書いて閉じる
         if log is not None:
             log.close()
+        raise
+    if log is not None:
+        if code == 0:
+            log.close()
+        else:
+            # 起動をやめた (マイクがないなど)。できごとがなければ、作ったファイルを消す
+            log.abandon()
+    return code
 
 
 def _run(
