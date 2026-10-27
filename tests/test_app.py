@@ -6,6 +6,7 @@
 import asyncio
 import json
 import random
+import re
 import threading
 from collections.abc import Sequence
 from pathlib import Path
@@ -42,10 +43,18 @@ def rng(seed: int = 0) -> random.Random:
 class Sim:
     """差し替えた時計で Engine を動かす。100 ms ごとに Tick を入れて、配信の流れを再現する。"""
 
-    def __init__(self, silence_seconds: int = 20) -> None:
+    def __init__(self, silence_seconds: int = 20, *, debug: bool = False) -> None:
         self.now = 0
         config = Config(silence=SilenceConfig(seconds=silence_seconds))
-        self.engine = app.Engine(config, load_lines(), clock=lambda: self.now, rng=rng())
+        # --debug の行は、出したときの時刻とともに集める
+        self.debug: list[tuple[int, str]] = []
+        self.engine = app.Engine(
+            config,
+            load_lines(),
+            clock=lambda: self.now,
+            rng=rng(),
+            debug=(lambda line: self.debug.append((self.now, line))) if debug else None,
+        )
         self.sent: list[tuple[int, ServerMessage]] = []
 
     async def _broadcast(self, message: ServerMessage) -> None:
@@ -497,3 +506,117 @@ def test_run_demo_submits_script_in_order_and_repeats() -> None:
     assert submitted[: len(script)] == [event for _, event in script]
     assert submitted[len(script) : len(script) * 2] == [event for _, event in script]
     assert sum(slept[: len(script) + 1]) * 1000 == pytest.approx(demo.cycle_ms(20))
+
+
+def test_demo_flow_sends_calm_normal_and_high() -> None:
+    # 見た目の確認のため、デモの 1 回分の流れで 3 つのテンションがすべてページに送られる
+    sim = Sim(silence_seconds=20)
+    for at, event in demo.demo_script(20):
+        sim.at(at, event)
+    sim.at(demo.cycle_ms(20))
+    levels = [p["level"] for _, p in sim.of("tension")]
+    assert set(levels) == {"calm", "normal", "high"}
+    assert levels[-1] == "calm"  # 次の繰り返しも Calm から始まる
+
+
+# --debug
+
+PERIODIC = re.compile(
+    r"\[debug\] 盛り上がり度 \d{1,3}（話した割合 \d{1,3} [+-] 補正 \d{1,3}） "
+    r"(calm|normal|high)（\d+\.\d 秒前に変化） "
+    r"沈黙: (Listening|Waiting|GaveUp) \d回 イベント: (Ready|Effecting|Cooldown)"
+)
+CHANGE = re.compile(r"\[debug\] テンション (calm|normal|high) → (calm|normal|high)")
+
+
+def test_debug_prints_state_every_2s() -> None:
+    sim = Sim(debug=True)
+    sim.at(10_000)
+    assert [t for t, _ in sim.debug] == [2_000, 4_000, 6_000, 8_000, 10_000]
+    assert sim.debug[0][1] == (
+        "[debug] 盛り上がり度 0（話した割合 0 + 補正 0） calm（2.0 秒前に変化） "
+        "沈黙: Listening 0回 イベント: Ready"
+    )
+
+
+def test_debug_prints_tension_change_when_it_happens() -> None:
+    sim = Sim(debug=True)
+    sim.at(0, ev.SpeechStarted())
+    sim.at(12_000, ev.SpeechEnded())
+    assert (10_500, "[debug] テンション calm → normal") in sim.debug
+    line = dict(sim.debug)[12_000]
+    assert line.startswith(
+        "[debug] 盛り上がり度 40（話した割合 40 + 補正 0） normal（1.5 秒前に変化）"
+    )
+
+
+def test_debug_shows_negative_bonus_and_states() -> None:
+    sim = Sim(debug=True)
+    sim.at(0, ev.SpeechStarted())
+    sim.at(11_000, ev.SpeechEnded(), ev.Keyword("death"))
+    sim.at(12_000)
+    # 話した割合 37 (11 秒) - 死亡の減点 (1 秒たって 27) = 10。
+    # 10.5 秒に Normal になってから 5 秒は変えないので、まだ Normal
+    assert dict(sim.debug)[12_000] == (
+        "[debug] 盛り上がり度 10（話した割合 37 - 補正 27） normal（1.5 秒前に変化） "
+        "沈黙: Waiting 0回 イベント: Effecting"
+    )
+
+
+def test_debug_lines_have_only_numbers_and_state_names() -> None:
+    sim = Sim(debug=True)
+    for at, event in demo.demo_script(20):
+        sim.at(at, event)
+    sim.at(demo.cycle_ms(20))
+    lines = [line for _, line in sim.debug]
+    assert any(CHANGE.fullmatch(line) for line in lines)
+    assert len([line for line in lines if PERIODIC.fullmatch(line)]) >= 25
+    # 形が決まった行だけで、セリフ・キーワード・トークン・パスは入らない
+    assert all(PERIODIC.fullmatch(line) or CHANGE.fullmatch(line) for line in lines)
+    texts = [text for texts in load_lines().lists.values() for text in texts]
+    for line in lines:
+        assert not any(text in line for text in texts)
+        assert "死ん" not in line and "やったー" not in line
+        assert TOKEN not in line and "\\" not in line and "/" not in line
+
+
+def test_no_debug_lines_without_debug() -> None:
+    sim = Sim()
+    for at, event in demo.demo_script(20):
+        sim.at(at, event)
+    assert sim.debug == []
+
+
+def _serve_briefly(config: Config, token: str, *, running: Any, state_messages: Any) -> None:
+    """server.serve の代わり。Runtime を少しだけ動かして止める。"""
+
+    async def broadcast(_message: ServerMessage) -> None:
+        pass
+
+    async def run() -> None:
+        async with running(broadcast):
+            await asyncio.sleep(0.5)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("debug", [True, False])
+def test_main_demo_with_and_without_debug(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    debug: bool,
+) -> None:
+    monkeypatch.setattr(server, "serve", _serve_briefly)
+    monkeypatch.setattr(app, "DEBUG_INTERVAL_MS", 100)
+    monkeypatch.chdir(tmp_path)
+    assert main(["--demo", "--debug"] if debug else ["--demo"]) == 0
+    out = capsys.readouterr().out
+    debug_lines = [line for line in out.splitlines() if line.startswith("[debug]")]
+    if debug:
+        assert debug_lines
+        assert all(PERIODIC.fullmatch(line) or CHANGE.fullmatch(line) for line in debug_lines)
+        token = out.split("/overlay?token=")[1].split()[0]
+        assert not any(token in line for line in debug_lines)
+    else:
+        assert "[debug]" not in out

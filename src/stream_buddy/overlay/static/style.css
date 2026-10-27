@@ -87,6 +87,46 @@ body[data-background="chroma"] {
   fill: #2b1a1f;
 }
 
+/* テンションで変わる色・目は 0.5 秒でなめらかに切り替える */
+
+.buddy-svg,
+.body,
+.fin,
+.eyelid,
+.eyelids,
+.sparkles {
+  transition: fill 0.5s ease, stroke 0.5s ease, filter 0.5s ease, opacity 0.5s ease;
+}
+
+/* まぶた (Calm の半目) は体と同じ色で目の上半分を隠す */
+.eyelid {
+  fill: #f08a8a;
+}
+
+.eyelid-line {
+  fill: none;
+  stroke: #2b1a1f;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.eye-shine {
+  fill: #ffffff;
+}
+
+.sparkle {
+  fill: #fff6b0;
+  stroke: #ffd35a;
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.eyelids,
+.sparkles {
+  opacity: 0;
+}
+
 .mouth-closed {
   fill: none;
   stroke: #2b1a1f;
@@ -119,31 +159,126 @@ body[data-background="chroma"] {
   50% { opacity: 1; }
 }
 
-/* テンション */
+/* テンション: 動き・体の色・目を data-tension で切り替える */
+
+/* Calm: ゆっくり大きくぷかぷか。青みがかって彩度を下げ、半目 */
 
 .buddy[data-tension="calm"] {
   animation: float-calm 4s ease-in-out infinite;
 }
 
-.buddy[data-tension="normal"] {
-  animation: float-normal 1.6s ease-in-out infinite;
+.buddy[data-tension="calm"] .body,
+.buddy[data-tension="calm"] .eyelid {
+  fill: #c9a3b8;
 }
 
+.buddy[data-tension="calm"] .body,
+.buddy[data-tension="calm"] .fin {
+  stroke: #8a6a82;
+}
+
+.buddy[data-tension="calm"] .fin {
+  fill: #d6b8c8;
+}
+
+.buddy[data-tension="calm"] .eyelids {
+  opacity: 1;
+}
+
+/* Normal: 小さく上下。元の色、普通の目 */
+
+.buddy[data-tension="normal"] {
+  animation: float-normal 2s ease-in-out infinite;
+}
+
+/* High: 大きく速く弾み、左右にも揺れる。暖色で明るく、うっすら光る。キラキラの目 */
+
 .buddy[data-tension="high"] {
-  animation: bounce-high 0.5s ease-in-out infinite;
+  animation: bounce-high 0.6s ease-in-out infinite;
+}
+
+.buddy[data-tension="high"] .buddy-svg {
+  animation: sway-high 1.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(255, 196, 92, 0.85));
+}
+
+.buddy[data-tension="high"] .body {
+  fill: #ff9a70;
+}
+
+.buddy[data-tension="high"] .body,
+.buddy[data-tension="high"] .fin {
+  stroke: #c9583c;
+}
+
+.buddy[data-tension="high"] .fin {
+  fill: #ffb98a;
+}
+
+.buddy[data-tension="high"] .sparkles {
+  opacity: 1;
+}
+
+.buddy[data-tension="high"] .sparkle {
+  animation: twinkle 0.8s ease-in-out infinite;
 }
 
 @keyframes float-calm {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(-10px) rotate(2deg); }
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-18px) rotate(3deg); }
 }
 
 @keyframes float-normal {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-5px); }
 }
 
 @keyframes bounce-high {
-  0%, 100% { transform: translateY(0) scale(1.04, 0.96); }
-  50% { transform: translateY(-28px) scale(0.97, 1.03); }
+  0%, 100% { transform: translateY(0) scale(1.05, 0.95); }
+  50% { transform: translateY(-30px) scale(0.97, 1.03); }
+}
+
+@keyframes sway-high {
+  0%, 100% { transform: translateX(-6px) rotate(-4deg); }
+  50% { transform: translateX(6px) rotate(4deg); }
+}
+
+@keyframes twinkle {
+  0%, 100% { transform: scale(0.7); }
+  50% { transform: scale(1.2); }
+}
+
+/* 動きを減らす設定のときは、動きを小さくする (色と目の変化は残す) */
+
+@media (prefers-reduced-motion: reduce) {
+  .buddy[data-tension="calm"],
+  .buddy[data-tension="normal"],
+  .buddy[data-tension="high"] {
+    animation: float-reduced 4s ease-in-out infinite;
+  }
+
+  .buddy[data-tension="high"] .buddy-svg,
+  .buddy[data-tension="high"] .sparkle {
+    animation: none;
+  }
+}
+
+@keyframes float-reduced {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* 確認用のテンションの表示 (URL に debug=1 があるときだけ) */
+
+.debug-tension {
+  position: fixed;
+  top: 4px;
+  left: 4px;
+  margin: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  font-family: Consolas, monospace;
+  font-size: 12px;
 }
