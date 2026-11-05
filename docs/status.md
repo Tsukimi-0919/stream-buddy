@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 3：T-16 の配信ログまで実装。OBS での演出の確認と、配信ログの手動確認（人間）待ち**
+**Phase 4：T-17 の公開前の仕上げまで実装。OBS での演出の確認と、配信ログの手動確認（人間）待ち**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -185,6 +185,19 @@ Phase 0（設計と守りの準備）は完了。
   - 設計書（requirements の FR-10・SR-06・プライバシー、threat-model の SR-06、architecture）、`config.example.toml`、README（使い方と、記録するもの・しないもの）を直した
   - `--demo` のキーワードは言葉を持たないため、デモでは `include_keyword = true` でも言葉は添わない
   - 未確認：Obsidian での表示、実際に「死んだ」と言ったときの記録（人間）
+
+- T-17：公開前の小さな仕上げ（別ユーザーでの試用（2026-11-05）でわかったこと）
+  - `--version`：`stream-buddy 0.1.0 (b12307a, 2026-11-05)` の形にした。ビルドのときにコミットしていない変更があれば `b12307a+dirty`、ソースから動かしたときは `(dev)`、ビルドの情報の形が違えば `(unknown)`（エラーで止めない）
+    - `scripts/build_exe.py` がビルドの前に `git rev-parse --short HEAD` と `git status --porcelain` を実行し（シェルを通さず、引数はリスト）、`build/build_info.json` に `{"commit", "dirty", "date"}` を書いて、exe の中の `stream_buddy/data/build_info.json` に同梱する。`src/` には書かない（テストで確認）。git が使えない・失敗したときはビルドしない
+    - 日付はビルドした PC のローカルの日付。ビルドの最後の `--version` の確認も、この形と一致するかを見る
+    - 実行時は `src/stream_buddy/build_info.py` が `importlib.resources` で読むだけ。git は呼ばない
+    - exe をビルドし、`--version` にコミットと日付が出ることを確認した
+  - `--help` の `--demo` の説明を、今の作り（偽の入力を状態機械に入れ、本物のテンション・セリフ・演出を確かめる）に合わせた
+  - 設定ファイルの知らない項目・項目がないときは、メッセージの最後に「新しいバージョンの config.example.toml と見比べてください。」を 1 回だけ添える。廃止した `include_speech_text` の案内はそのまま残し、そのあとに同じ案内を添える
+  - セリフ集の知らない表・項目、表・項目がないときは、最後に「新しいバージョンの lines.toml と見比べてください。」を添える。ほかのエラー（空のセリフ・型の違い・TOML の誤りなど）には添えない
+  - README に「更新するとき」の節（別の場所に展開、`config.toml`・セリフ集・モデルを移す、`config.example.toml` と見比べる、`--version` で確かめる。トークンは `%LOCALAPPDATA%` にあるので OBS の URL は変わらない）
+  - ADR 0005：視聴者のコメントの読み上げは作らない（既存の道具にまかせる）。メンダコのセリフの読み上げは v1.1 で、PC の中の読み上げの道具にローカルの通信で渡す。requirements の「やらないこと」に追加
+  - 残り：`docs/build.md` の `--version` の説明（`0.1.0` が出る）が古いまま（このタスクで変更してよいファイルに入っていないため）
 
 ## まだないもの
 

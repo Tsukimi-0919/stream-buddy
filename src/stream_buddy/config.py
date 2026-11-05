@@ -31,6 +31,8 @@ _REMOVED_KEYS = {
         "（キーワードで起きた死亡・クリアに、検知した言葉を添える）を使ってください"
     ),
 }
+# 知らない項目・項目がないときに、メッセージの最後に添える案内
+CONFIG_OUTDATED_HINT = "新しいバージョンの config.example.toml と見比べてください。"
 # メモ帳などが先頭に付けることがある、UTF-8 の BOM
 UTF8_BOM = b"\xef\xbb\xbf"
 
@@ -227,8 +229,17 @@ def load_config(path: Path | None) -> Config:
     try:
         return Config.model_validate(data)
     except ValidationError as e:
-        messages = [_format_error(err) for err in e.errors()]
-        raise ConfigError("設定ファイルに誤りがあります:\n" + "\n".join(messages)) from None
+        raise ConfigError(_format_errors(e.errors())) from None
+
+
+def _format_errors(errors: list[ErrorDetails]) -> str:
+    messages = [_format_error(err) for err in errors]
+    text = "設定ファイルに誤りがあります:\n" + "\n".join(messages)
+    # 知らない項目・項目がないのは、古い設定ファイルを新しい exe で使ったときに起きやすい
+    # 廃止した項目も知らない項目の一種 (個別の案内に加えて添える)
+    if any(err["type"] in ("extra_forbidden", "missing") for err in errors):
+        text += "\n" + CONFIG_OUTDATED_HINT
+    return text
 
 
 def _format_error(err: ErrorDetails) -> str:
@@ -240,6 +251,8 @@ def _format_error(err: ErrorDetails) -> str:
             return f"{where} {_REMOVED_KEYS[loc]}"
         case "extra_forbidden":
             return f"{where} は知らない項目です（書き間違いがないか確認してください）"
+        case "missing":
+            return f"{where} がありません"
         case "value_error":
             reason = str(ctx.get("error", err["msg"]))
             # セクション全体の検証 (model_validator) の理由には指定値を含めてある
