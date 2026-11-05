@@ -1,6 +1,6 @@
 [project]
 name = "stream-buddy"
-version = "0.1.0"
+version = "0.9.0"
 description = "1人配信の相棒「メンダコ」を OBS のブラウザソースに表示するツール"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -24,18 +24,9 @@ build-backend = "hatchling.build"
 packages = ["src/stream_buddy"]
 
 [dependency-groups]
-build = [
-    "pyinstaller>=6.22.3",
-]
-dev = [
-    "httpx>=0.28.1",
-    "mypy>=2.4.0",
-    "pytest>=9.1.1",
-    "ruff>=0.17.2",
-]
-spike-asr = [
-    "faster-whisper>=1.2.1",
-]
+build = ["pyinstaller>=6.22.3"]
+dev = ["httpx>=0.28.1", "mypy>=2.4.0", "pytest>=9.1.1", "ruff>=0.17.2"]
+spike-asr = ["faster-whisper>=1.2.1"]
 
 [tool.ruff]
 line-length = 100
