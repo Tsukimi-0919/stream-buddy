@@ -23,6 +23,9 @@ jobs:
       contents: write       # 下書きのリリースを作るため
       id-token: write       # ビルドの証明（attestation）の署名のため
       attestations: write   # ビルドの証明を保存するため
+    env:
+      PYTHONUTF8: "1"           # Actions の Windows は英語環境のため、日本語の出力で止まらないようにする
+      PYTHONIOENCODING: utf-8
     steps:
       # ci.yml と同じコミットハッシュにそろえる（Dependabot が ci.yml を更新していたら、ここも合わせる）
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
