@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
       - name: タグと pyproject.toml のバージョンが同じか確かめる
         shell: bash
@@ -55,8 +55,9 @@ jobs:
       - name: 依存の脆弱性チェック（SR-08）
         shell: bash
         run: |
-          uv export --format requirements-txt --no-dev --no-emit-project > requirements-audit.txt
-          uvx pip-audit -r requirements-audit.txt
+          # リポジトリの外に書く（中に書くとビルドが +dirty になる）
+          uv export --format requirements-txt --no-dev --no-emit-project > "$RUNNER_TEMP/requirements-audit.txt"
+          uvx pip-audit -r "$RUNNER_TEMP/requirements-audit.txt"
 
       - name: exe をビルドする
         run: uv run --group build python scripts/build_exe.py --mode onedir
