@@ -1,0 +1,100 @@
+# タグ（v1.0.0 など）を push したときだけ、exe をビルドして Releases の「下書き」に置く。
+# 公開ボタンは人が押す。手元の PC でビルドした exe は配布しない（SR-11）。
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# 既定はすべて読み取りだけ。必要な権限はジョブごとに足す（SR-10）
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: exe のビルドと下書きリリース
+    runs-on: windows-latest
+    permissions:
+      contents: write       # 下書きのリリースを作るため
+      id-token: write       # ビルドの証明（attestation）の署名のため
+      attestations: write   # ビルドの証明を保存するため
+    steps:
+      # ci.yml と同じコミットハッシュにそろえる（Dependabot が ci.yml を更新していたら、ここも合わせる）
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+
+      - name: タグと pyproject.toml のバージョンが同じか確かめる
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(uv run --no-project python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          echo "tag=$tag pyproject=$ver"
+          if [ "$tag" != "$ver" ]; then
+            echo "::error::タグ（$tag）と pyproject.toml のバージョン（$ver）が違います"
+            exit 1
+          fi
+
+      - name: 依存をロックファイルどおりに入れる
+        run: uv sync --locked --all-extras --dev --group build
+
+      - name: テスト（通らなければリリースしない）
+        run: uv run pytest
+
+      - name: 依存の脆弱性チェック（SR-08）
+        shell: bash
+        run: |
+          uv export --format requirements-txt --no-dev --no-emit-project > requirements-audit.txt
+          uvx pip-audit -r requirements-audit.txt
+
+      - name: exe をビルドする
+        run: uv run --group build python scripts/build_exe.py --mode onedir
+
+      - name: exe の --version を確かめる（コミットが入り、+dirty でないこと）
+        shell: bash
+        run: |
+          out="$(./dist/stream-buddy/stream-buddy.exe --version)"
+          echo "$out"
+          short="$(git rev-parse --short HEAD)"
+          case "$out" in
+            *"+dirty"*) echo "::error::+dirty の exe は配布しない"; exit 1 ;;
+          esac
+          case "$out" in
+            *"($short,"*) ;;
+            *) echo "::error::--version にコミット $short が入っていない"; exit 1 ;;
+          esac
+
+      - name: zip と SHA-256 を作る
+        shell: pwsh
+        run: |
+          $name = "stream-buddy-$env:GITHUB_REF_NAME-windows-x64"
+          Compress-Archive -Path dist/stream-buddy -DestinationPath "$name.zip"
+          $hash = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Out-File -Encoding ascii -NoNewline "$name.zip.sha256"
+          Get-Content "$name.zip.sha256"
+          "ZIP_NAME=$name.zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: ビルドの証明（attestation）を付ける
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ env.ZIP_NAME }}
+
+      - name: 下書きのリリースを作る（公開は人が行う）
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "$ZIP_NAME" "$ZIP_NAME.sha256" \
+            --draft \
+            --verify-tag \
+            --title "stream-buddy $GITHUB_REF_NAME" \
+            --notes "下書きです。公開する前に、リリースノートを書き、zip を手元で確かめてください。"
