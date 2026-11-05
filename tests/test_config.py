@@ -2,8 +2,16 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from pydantic_core import ErrorDetails
 
-from stream_buddy.config import UTF8_BOM, Config, ConfigError, load_config
+from stream_buddy.config import (
+    CONFIG_OUTDATED_HINT,
+    UTF8_BOM,
+    Config,
+    ConfigError,
+    _format_errors,
+    load_config,
+)
 
 EXAMPLE = Path(__file__).parent.parent / "config.example.toml"
 
@@ -105,6 +113,47 @@ def test_unknown_key(tmp_path: Path) -> None:
 def test_unknown_section(tmp_path: Path) -> None:
     message = load_error(tmp_path, "[sound]\nvolume = 1\n")
     assert "[sound] は知らない項目です" in message
+
+
+@pytest.mark.parametrize("text", ["[silence]\nsecond = 20\n", "[sound]\nvolume = 1\n"])
+def test_unknown_key_points_to_config_example(tmp_path: Path, text: str) -> None:
+    # 古い設定ファイルを新しい exe で使ったときのため、最後に見比べる案内を添える
+    message = load_error(tmp_path, text + "[server]\nport = 1\n")
+    assert message.endswith("\n" + CONFIG_OUTDATED_HINT)
+    assert message.count(CONFIG_OUTDATED_HINT) == 1
+
+
+def test_removed_key_keeps_its_guidance_and_points_to_config_example(tmp_path: Path) -> None:
+    message = load_error(tmp_path, "[log]\ninclude_speech_text = true\n")
+    assert "include_keyword" in message
+    assert message.endswith("\n" + CONFIG_OUTDATED_HINT)
+
+
+def test_missing_key_points_to_config_example() -> None:
+    # 今の設定はすべての項目に既定値があるため、検証エラーの形で確かめる
+    errors: list[ErrorDetails] = [
+        {"type": "missing", "loc": ("server", "port"), "msg": "Field required", "input": {}}
+    ]
+    message = _format_errors(errors)
+    assert "[server] port がありません" in message
+    assert message.endswith("\n" + CONFIG_OUTDATED_HINT)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[server]\nport = 1\n",
+        '[server]\nport = "8765"\n',
+        '[display]\nbackground = "blue"\n',
+        "[hotkeys]\ndeath = 'F10'\n",
+    ],
+)
+def test_other_errors_do_not_point_to_config_example(tmp_path: Path, text: str) -> None:
+    assert CONFIG_OUTDATED_HINT not in load_error(tmp_path, text)
+
+
+def test_toml_error_does_not_point_to_config_example(tmp_path: Path) -> None:
+    assert CONFIG_OUTDATED_HINT not in load_error(tmp_path, "[server\n")
 
 
 @pytest.mark.parametrize(

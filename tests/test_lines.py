@@ -7,6 +7,7 @@ import pytest
 
 from stream_buddy.config import UTF8_BOM, ConfigError
 from stream_buddy.lines import (
+    LINES_OUTDATED_HINT,
     MAX_FILE_BYTES,
     SCHEMA,
     LineBook,
@@ -182,6 +183,52 @@ def test_missing_list(tmp_path: Path) -> None:
 def test_missing_table(tmp_path: Path) -> None:
     lists = {k: v for k, v in valid_lists().items() if k[0] != "tension"}
     assert "[tension] がありません" in load_error(tmp_path, toml_text(lists))
+
+
+def outdated_texts() -> list[str]:
+    """知らない表・項目、ない表・項目があるセリフ集。"""
+    unknown_key = valid_lists()
+    unknown_key[("event", "win")] = ["勝ち"]
+    missing_key = valid_lists()
+    del missing_key[("tension", "cheer")]
+    missing_table = {k: v for k, v in valid_lists().items() if k[0] != "tension"}
+    return [
+        toml_text(valid_lists(), extra='[greeting]\nhello = ["やあ"]\n'),
+        toml_text(unknown_key),
+        toml_text(missing_key),
+        toml_text(missing_table),
+    ]
+
+
+@pytest.mark.parametrize("text", outdated_texts())
+def test_outdated_lines_point_to_lines_toml(tmp_path: Path, text: str) -> None:
+    # 古いセリフ集を新しい exe で使ったときのため、最後に見比べる案内を添える
+    message = load_error(tmp_path, text)
+    assert message.endswith("\n" + LINES_OUTDATED_HINT)
+    assert message.count(LINES_OUTDATED_HINT) == 1
+
+
+def test_outdated_hint_is_added_with_other_errors(tmp_path: Path) -> None:
+    lists = valid_lists(event__death=[""])
+    del lists[("tension", "cheer")]
+    message = load_error(tmp_path, toml_text(lists))
+    assert "[event] death の 1 番目が空です" in message
+    assert message.endswith("\n" + LINES_OUTDATED_HINT)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        toml_text(valid_lists(event__death=[""])),
+        toml_text(valid_lists(event__death=[])),
+        toml_text(valid_lists()).replace(
+            'high = ["tension-high-1", "tension-high-2"]', 'high = "a"'
+        ),
+        "[silence\n",
+    ],
+)
+def test_other_lines_errors_do_not_point_to_lines_toml(tmp_path: Path, text: str) -> None:
+    assert LINES_OUTDATED_HINT not in load_error(tmp_path, text)
 
 
 def test_not_a_list(tmp_path: Path) -> None:

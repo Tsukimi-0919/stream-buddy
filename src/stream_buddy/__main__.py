@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from stream_buddy import __version__, app, audio, hotkey, keywords, lines, server, stream_log
+from stream_buddy import app, audio, build_info, hotkey, keywords, lines, server, stream_log
 from stream_buddy.config import Config, ConfigError, load_config
 from stream_buddy.detect import SpeechDetector
 from stream_buddy.state.events import EventKind, Hotkey
@@ -17,7 +17,7 @@ from stream_buddy.token_store import TokenStoreError, default_token_dir, load_or
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="stream-buddy")
-    parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument("--version", action="version", version=build_info.version_text())
     parser.add_argument(
         "--config",
         type=Path,
@@ -27,7 +27,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--demo",
         action="store_true",
-        help="見え方の確認用に、決まった流れのメッセージを繰り返し送る",
+        help=(
+            "マイク・音声認識・ホットキーを使わず、決まった流れの偽の入力を状態機械に入れて、"
+            "本物のテンション・セリフ・演出を確かめる (既定の設定で約 1 分の流れを繰り返す)"
+        ),
     )
     parser.add_argument(
         "--reset-token",

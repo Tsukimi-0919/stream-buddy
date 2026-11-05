@@ -24,6 +24,8 @@ SCHEMA: dict[str, tuple[str, ...]] = {
 }
 MAX_FILE_BYTES = 64 * 1024
 MAX_LINES_PER_LIST = 30
+# 知らない表・項目、表・項目がないときに、メッセージの最後に添える案内
+LINES_OUTDATED_HINT = "新しいバージョンの lines.toml と見比べてください。"
 # 制御文字 (Cc・Cf) のうち、絵文字に使うので許すもの: ゼロ幅接合子、異体字セレクタ
 ALLOWED_FORMAT_CHARS = frozenset({"‍", "️"})
 
@@ -67,9 +69,13 @@ def load_lines(file: str = "") -> LineBook:
         raise LinesError(f"{where}は UTF-8 で保存してください") from None
     except tomllib.TOMLDecodeError as e:
         raise LinesError(f"{where}が TOML として正しくありません: {e}") from None
-    errors, book = _validate(parsed)
+    errors, outdated, book = _validate(parsed)
     if errors:
-        raise LinesError(f"{where}に誤りがあります:\n" + "\n".join(errors))
+        message = f"{where}に誤りがあります:\n" + "\n".join(errors)
+        # 知らない表・項目や、ない表・項目は、古いセリフ集を新しい exe で使ったときに起きやすい
+        if outdated:
+            message += "\n" + LINES_OUTDATED_HINT
+        raise LinesError(message)
     return book
 
 
@@ -83,16 +89,20 @@ def _read_file(path: Path) -> bytes:
         raise LinesError(f"[lines] file のセリフ集を読み込めません: {e.strerror}") from None
 
 
-def _validate(data: dict[str, object]) -> tuple[list[str], LineBook]:
+def _validate(data: dict[str, object]) -> tuple[list[str], bool, LineBook]:
+    """(エラー, 知らない表・項目や、ない表・項目があったか, セリフ集) を返す。"""
     errors: list[str] = []
+    outdated = False
     lists: dict[ListKey, tuple[str, ...]] = {}
     for table in data:
         if table not in SCHEMA:
             errors.append(f"[{table}] は知らない表です（書き間違いがないか確認してください）")
+            outdated = True
     for table, keys in SCHEMA.items():
         section = data.get(table)
         if section is None:
             errors.append(f"[{table}] がありません")
+            outdated = True
             continue
         if not isinstance(section, dict):
             errors.append(f"[{table}] は表（[{table}]）で書いてください")
@@ -102,10 +112,12 @@ def _validate(data: dict[str, object]) -> tuple[list[str], LineBook]:
                 errors.append(
                     f"[{table}] {key} は知らない項目です（書き間違いがないか確認してください）"
                 )
+                outdated = True
         for key in keys:
             where = f"[{table}] {key}"
             if key not in section:
                 errors.append(f"{where} がありません")
+                outdated = True
                 continue
             lines = section[key]
             if not isinstance(lines, list):
@@ -121,7 +133,7 @@ def _validate(data: dict[str, object]) -> tuple[list[str], LineBook]:
                 if problem:
                     errors.append(f"{where} の {index} 番目{problem}")
             lists[(table, key)] = tuple(line for line in lines if isinstance(line, str))
-    return errors, LineBook(lists)
+    return errors, outdated, LineBook(lists)
 
 
 def _check_line(line: object) -> str | None:
