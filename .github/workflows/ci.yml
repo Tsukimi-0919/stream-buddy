@@ -1,5 +1,5 @@
 # プルリクエストと main への push で品質・セキュリティチェックを行う。
-# Actions はタグ指定になっている。Actions はコミットハッシュで固定する（SR-10）。
+# Actions はコミットハッシュで固定する（SR-10）。
 name: CI
 
 on:
@@ -71,5 +71,6 @@ jobs:
       - name: 依存の脆弱性チェック（SR-08）
         shell: bash
         run: |
-          uv export --format requirements-txt --no-dev --no-emit-project > requirements-audit.txt
-          uvx pip-audit -r requirements-audit.txt
+          # リポジトリの外に書く（中に書くとビルドが +dirty になる）
+          uv export --format requirements-txt --no-dev --no-emit-project > "$RUNNER_TEMP/requirements-audit.txt"
+          uvx pip-audit -r "$RUNNER_TEMP/requirements-audit.txt"
