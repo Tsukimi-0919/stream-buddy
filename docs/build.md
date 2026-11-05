@@ -21,7 +21,15 @@ uv run --group build python scripts/build_exe.py --mode onefile
 
 - ビルドの前に、同じモードの前回の出力（`dist/` と `build/` の中の stream-buddy のフォルダ）だけを消す。もう一方のモードの出力は残る
 - 終わると、出力の場所・サイズ（onedir はフォルダ全体、onefile は exe）・`stream-buddy.exe` の SHA-256 を表示する
-- ビルドした exe で `--version` を実行し、`0.1.0` が出なければ失敗（終了コード 1）とする
+- ビルドの前に、`git rev-parse --short HEAD` と `git status --porcelain` でコミットと変更の有無を調べ、
+  ビルドの情報（`{"commit": "...", "dirty": false, "date": "YYYY-MM-DD"}`）を `build/build_info.json` に書く。
+  exe の中には `stream_buddy/data/build_info.json` として同梱する（`src/` には書かない）
+  - 日付はビルドした PC のローカルの日付
+  - git が見つからない・失敗したとき（リポジトリの外など）は、ビルドしない（終了コード 1）
+- ビルドした exe で `--version` を実行し、次の形が出なければ失敗（終了コード 1）とする
+  - コミットしてからビルドしたとき：`stream-buddy 0.1.0 (b12307a, 2026-11-05)`
+  - コミットしていない変更（追跡していないファイルを含む）があるとき：`stream-buddy 0.1.0 (b12307a+dirty, 2026-11-05)`
+  - 配る exe は、コミットしてから（`+dirty` が付かない状態で）ビルドする
 - UPX による圧縮は使わない。音声認識のモデルとスパイクの依存、テストの依存（pytest・mypy）は含めない
 - `dist/` と `build/` は `.gitignore` 済み
 
@@ -29,7 +37,9 @@ uv run --group build python scripts/build_exe.py --mode onefile
 
 onedir と onefile のそれぞれで、`stream-buddy.exe` のあるフォルダで PowerShell を開いて行う。
 
-1. `.\stream-buddy.exe --version` → `0.1.0` と出る
+1. `.\stream-buddy.exe --version` → `stream-buddy 0.1.0 (<コミット>, <ビルドした日>)` と出る
+   - ビルドしたときにコミットしていない変更があれば、コミットのあとに `+dirty` が付く
+   - ソースから動かしたとき（`uv run stream-buddy --version`）は `stream-buddy 0.1.0 (dev)`。ビルドの情報が壊れているときは `(unknown)`
 2. `.\stream-buddy.exe --list-devices` → マイクの一覧が出る（PortAudio の DLL が読み込めている）
 3. `.\stream-buddy.exe --demo` → OBS 用の URL が表示される
    - OBS のブラウザソースにその URL を設定し、メンダコが表示されて動く（口パク・吹き出しなど）
