@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import contextlib
+import io
 import logging
 import sys
 from collections.abc import Sequence
@@ -15,7 +16,20 @@ from stream_buddy.state.events import EventKind, Hotkey
 from stream_buddy.token_store import TokenStoreError, default_token_dir, load_or_create_token
 
 
+def use_replace_errors(stream: object) -> None:
+    """表示できない文字を ? などに置き換えて、出力で止まらないようにする。
+
+    出力先 (ファイル、別のプログラム、英語環境のコンソール) が日本語を表示できないと、
+    print が UnicodeEncodeError で止まるため。文字コードは変えないので、
+    日本語を表示できるコンソールでは今までどおり日本語で表示される。
+    """
+    if isinstance(stream, io.TextIOWrapper):
+        stream.reconfigure(errors="replace")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    use_replace_errors(sys.stdout)
+    use_replace_errors(sys.stderr)
     parser = argparse.ArgumentParser(prog="stream-buddy")
     parser.add_argument("--version", action="version", version=build_info.version_text())
     parser.add_argument(

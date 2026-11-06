@@ -69,6 +69,26 @@ PyInstaller には、フォルダで配る **onedir** と、1 ファイルで配
 - 今回の Defender の確認は、自分の PC でビルドしたファイルに対するもの
 - ダウンロードしたファイル（Mark of the Web 付き）での SmartScreen と Defender の確認は、
   Phase 4 で GitHub Actions のビルドを Releases に置いたときに行い、必要ならこの決定を見直す
+  → 下の「ダウンロードしたファイルでの確認（Phase 4）」で確認した。決定は変えない
+
+## ダウンロードしたファイルでの確認（Phase 4）
+
+v0.9.0 の下書きのリリースを、別のユーザーでブラウザからダウンロードして、人間が確認した（2026-11-06）。
+
+- 下書きのリリースから zip と `.sha256` をブラウザでダウンロードし、SHA-256 が一致した
+- 展開した `stream-buddy.exe` を開くと、SmartScreen の画面が出た（画面写真：`docs/images/smartscreen-1.png`・`smartscreen-2.png`）
+  - 1 枚目：「Windows によって PC が保護されました」「Microsoft Defender SmartScreen は認識されないアプリの起動を停止しました」。ボタンは「実行しない」と「詳細情報」
+  - 2 枚目（「詳細情報」を押したあと）：「アプリ：stream-buddy.exe」「発行元：不明な発行元」。ボタンは「実行」と「実行しない」
+- 「実行」を押すと起動でき、Defender にブロックされなかった
+- `--version` は `stream-buddy 0.9.0 (e17b827, 2026-11-05)`（GitHub Actions のビルド）
+
+結論
+
+- **決定（onedir の zip で配る、署名しない）は変えない**
+- SmartScreen の警告は、署名しないと決めたときに予想していたとおりだった。Defender に起動をブロックされることはなかった
+- 警告には README の「導入」の節で対応する。警告が出る理由（署名していないこと）、SHA-256 とビルド証明での確かめ方、
+  「詳細情報」→「アプリ：stream-buddy.exe」を確かめて「実行」する手順、公式の Releases 以外の exe を実行しないことを、画面写真とともに説明する
+- 未決だった「ダウンロード時の SmartScreen と Defender の確認」は、これで閉じる
 
 ## 結果
 

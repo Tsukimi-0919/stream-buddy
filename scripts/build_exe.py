@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import shutil
 import subprocess
@@ -73,6 +74,16 @@ _DATA_SEP = ":"
 
 class BuildError(Exception):
     pass
+
+
+def use_replace_errors(stream: object) -> None:
+    """表示できない文字を ? などに置き換えて、出力で止まらないようにする。
+
+    GitHub Actions の Windows (英語環境) や、出力をファイルに渡したときに、
+    日本語の print が UnicodeEncodeError で止まるため (stream_buddy.__main__ と同じ)。
+    """
+    if isinstance(stream, io.TextIOWrapper):
+        stream.reconfigure(errors="replace")
 
 
 # git の引数を受け取り、標準出力を返す。失敗したら BuildError
@@ -275,6 +286,8 @@ def build(mode: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    use_replace_errors(sys.stdout)
+    use_replace_errors(sys.stderr)
     parser = argparse.ArgumentParser(description="stream-buddy を PyInstaller で exe にする")
     parser.add_argument(
         "--mode",
