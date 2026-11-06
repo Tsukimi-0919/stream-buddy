@@ -19,6 +19,68 @@ OBS Studio のブラウザソースに表示し、あなたの声やキー操作
 - Windows 10 / 11
 - OBS Studio
 
+## 導入
+
+### 1. ダウンロード
+
+[Releases](https://github.com/Tsukimi-0919/stream-buddy/releases) から、次の 2 つをダウンロードします（`vX.Y.Z` はバージョン）。
+
+- `stream-buddy-vX.Y.Z-windows-x64.zip`（本体）
+- `stream-buddy-vX.Y.Z-windows-x64.zip.sha256`（本物か確かめるためのファイル）
+
+### 2. 本物か確かめる（任意ですが、おすすめします）
+
+2 つのファイルを置いたフォルダで PowerShell を開き、次の 1 行を実行します。`vX.Y.Z` の部分は、ダウンロードしたファイルの名前に合わせて書き換えてください。
+
+```powershell
+$name="stream-buddy-vX.Y.Z-windows-x64.zip"; $a=(Get-FileHash $name -Algorithm SHA256).Hash.ToLower(); $b=(Get-Content "$name.sha256" -Raw).Split(" ")[0].Trim(); if($a -eq $b){"一致しました：本物です"}else{"一致しません！ 使わないでください"}
+```
+
+- 「一致しました：本物です」と出れば、配布したファイルと同じものです
+- 「一致しません！」と出たときは、**そのファイルは使わずに削除し**、Releases からダウンロードし直してください
+
+さらに確かめたい人は、[GitHub CLI](https://cli.github.com/) で次を実行すると、この zip が GitHub Actions でビルドされたもの（ビルド証明）であることを確かめられます。
+
+```powershell
+gh attestation verify stream-buddy-vX.Y.Z-windows-x64.zip --repo Tsukimi-0919/stream-buddy
+```
+
+### 3. 展開
+
+zip を好きなフォルダに展開します（日本語を含むフォルダでもかまいません）。
+`stream-buddy` フォルダができ、その中に `stream-buddy.exe` と `_internal` フォルダがあります。**`_internal` は消さずに、exe と同じフォルダに置いたままにしてください。**
+
+### 4. 音声認識モデル（キーワード検知を使うとき）
+
+「死んだ」「やったー」などのキーワード検知を使うときは、[音声認識モデルの取得](#音声認識モデルの取得キーワード検知を使うとき)の手順でモデルを用意します。
+使わないときは飛ばしてかまいません（ホットキーは使えます）。
+
+### 5. 起動と SmartScreen の画面
+
+`stream-buddy.exe` を初めて開くと、次のような青い画面（Microsoft Defender SmartScreen）が出ます。
+
+![「Windows によって PC が保護されました」の画面。ボタンは「実行しない」と「詳細情報」](docs/images/smartscreen-1.png)
+
+- この画面が出るのは、stream-buddy が**コード署名をしていない**ためです（費用をかけない方針です。[ADR 0004](docs/adr/0004-exe-packaging.md)）
+- 悪いものだという意味ではありませんが、**上の「本物か確かめる」で一致した zip から展開した exe だけ**を実行してください
+
+実行するときは、次の手順で進めます。
+
+1. 「詳細情報」を押す
+2. 次の画面で「アプリ：stream-buddy.exe」と表示されていることを確かめる（「発行元：不明な発行元」と出るのは、署名をしていないためです）
+3. 「実行」を押す
+
+![「詳細情報」を押したあとの画面。「アプリ：stream-buddy.exe」「発行元：不明な発行元」と表示され、ボタンは「実行」と「実行しない」](docs/images/smartscreen-2.png)
+
+- **公式の [Releases](https://github.com/Tsukimi-0919/stream-buddy/releases) 以外から手に入れた exe は、実行しないでください**
+
+### 6. OBS の設定
+
+起動すると、コンソールに OBS 用の URL が表示されます。OBS Studio で「ブラウザ」ソースを追加し、その URL を設定します。
+
+- URL にはトークン（合言葉）が含まれます。[注意事項](#注意事項)を必ず読んでください
+- メンダコの置き場所は [`&pos=`](#メンダコの置き場所pos) で選べます
+
 ## プライバシー
 
 - 音声は**保存しません**。メモリ上で処理して、すぐに破棄します
