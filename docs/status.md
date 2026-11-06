@@ -197,7 +197,7 @@ Phase 0（設計と守りの準備）は完了。
   - セリフ集の知らない表・項目、表・項目がないときは、最後に「新しいバージョンの lines.toml と見比べてください。」を添える。ほかのエラー（空のセリフ・型の違い・TOML の誤りなど）には添えない
   - README に「更新するとき」の節（別の場所に展開、`config.toml`・セリフ集・モデルを移す、`config.example.toml` と見比べる、`--version` で確かめる。トークンは `%LOCALAPPDATA%` にあるので OBS の URL は変わらない）
   - ADR 0005：視聴者のコメントの読み上げは作らない（既存の道具にまかせる）。メンダコのセリフの読み上げは v1.1 で、PC の中の読み上げの道具にローカルの通信で渡す。requirements の「やらないこと」に追加
-  - 残り：`docs/build.md` の `--version` の説明（`0.1.0` が出る）が古いまま（このタスクで変更してよいファイルに入っていないため）
+  - 残り：`docs/build.md` の `--version` の説明が古いまま → T-18 で解消
 
 - T-18：公開前の最後の仕上げ（v0.9.0 の下書きリリースを別ユーザーでブラウザからダウンロードして確かめた結果（2026-11-06）をもとに）
   - README に「導入」の節：ダウンロード（zip と `.sha256`）→ 本物か確かめる（`Get-FileHash` の 1 行、`gh attestation verify`）→ 展開 → 音声認識モデル（既存の節へのリンク）→ 起動と SmartScreen の画面（画面写真 2 枚、署名しない理由、「詳細情報」→「アプリ：stream-buddy.exe」を確かめて「実行」、公式の Releases 以外の exe は実行しない）→ OBS の設定（URL をブラウザソースに設定。注意事項と `&pos=` へのリンク）。バージョンは `vX.Y.Z` のまま
@@ -205,7 +205,7 @@ Phase 0（設計と守りの準備）は完了。
   - 出力先が日本語を表示できなくても止まらない：`__main__.main()` と `scripts/build_exe.py` の `main()` の最初で、標準出力・標準エラーを `reconfigure(errors="replace")` にする（文字コードは変えない。`TextIOWrapper` でなければ何もしない）
   - テスト：`tests/test_output_encoding.py`（cp1252 の出力先に日本語を出しても例外にならない。`main` と `build_exe.main` のエラー表示も）、`tests/test_workflows.py`（`.github/workflows/` の `uses:` がすべて 40 文字のコミットハッシュで、同じ Action のハッシュがそろっている。ずれていればファイル・行・Action を示す）、`tests/test_readme.py`（SHA-256 のコマンドと画面写真への参照）
     - 今のワークフローは、すべてハッシュで固定され、そろっている
-  - 残り：画面写真の 1 枚目のファイル名が `docs/images/smartscreen-1.png.png` になっている（README は `smartscreen-1.png` を参照）。人が名前を直してコミットする
+  - 確認のあとの追加：README の冒頭の注意を「お試し版（v0.9.0）を公開中、メンダコの絵は仮、感想や不具合は Issue へ（個別のサポートは約束しない）」に書き換えた。`docs/build.md` の `--version` の例を、バージョンに依存しない書き方（`<バージョン>`、例は 0.9.0）にした（T-17 の残りを解消）。画面写真 2 枚（`docs/images/smartscreen-1.png`・`smartscreen-2.png`）をコミットし、README から参照する画像が実際にあることをテストで確かめる
 
 ## まだないもの
 
