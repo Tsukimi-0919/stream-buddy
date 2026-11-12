@@ -206,4 +206,5 @@ OBS のブラウザソースの URL の末尾に `&pos=` を付けると、ペ�
 ## ライセンス
 
 - ソースコード：[MIT License](LICENSE)
-- メンダコの画像などの素材：`assets/LICENSE` を参照（素材の追加時に用意します）
+- メンダコの画像などの素材（`src/stream_buddy/overlay/static/img/`）：[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)、表記は「Tsukimi-0919」。詳しくは [assets/LICENSE](assets/LICENSE) を参照
+- 素材の出どころ（AI で作成したことなど）：[CREDITS.md](CREDITS.md) を参照

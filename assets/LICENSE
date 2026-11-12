@@ -1,0 +1,25 @@
+素材のライセンス (Asset License)
+
+対象 (Applies to):
+  src/stream_buddy/overlay/static/img/ にある画像
+  (images in src/stream_buddy/overlay/static/img/)
+  - mendako-body.png (メンダコの体 / Mendako body)
+
+ライセンス (License):
+  Creative Commons Attribution 4.0 International (CC BY 4.0)
+  https://creativecommons.org/licenses/by/4.0/
+
+表記 (Attribution):
+  Tsukimi-0919
+
+この画像は AI (ChatGPT の画像生成) で作成し、加工したものです。
+地域によっては、AI で作成した画像に著作権が認められない場合があります。
+
+These images were created with AI (ChatGPT image generation) and then edited.
+In some jurisdictions, AI-generated images may not be protected by copyright.
+
+各ファイルの作成方法と加工の内容は、リポジトリの CREDITS.md を参照してください。
+For how each file was made and edited, see CREDITS.md in the repository root.
+
+ソースコードのライセンスは、リポジトリの LICENSE (MIT License) を参照してください。
+For the source code license, see LICENSE (MIT License) in the repository root.

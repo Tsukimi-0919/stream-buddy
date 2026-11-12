@@ -117,3 +117,14 @@ def test_build_info_is_bundled_as_package_data(
     monkeypatch.setattr(build_exe, "portaudio_dll", lambda: tmp_path / "portaudio.dll")
     args = build_exe.pyinstaller_args("onedir")
     assert f"{build_exe.BUILD_INFO_FILE}:stream_buddy/data" in args
+
+
+def test_overlay_images_are_bundled_with_overlay(
+    build_exe: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # overlay フォルダを丸ごと同梱するので、static/img/ の画像も exe に入る (T-19)
+    monkeypatch.setattr(build_exe, "portaudio_dll", lambda: tmp_path / "portaudio.dll")
+    args = build_exe.pyinstaller_args("onedir")
+    assert f"{build_exe.OVERLAY_DIR}:stream_buddy/overlay" in args
+    image = build_exe.OVERLAY_DIR / "static" / "img" / "mendako-body.png"
+    assert image.is_file()
