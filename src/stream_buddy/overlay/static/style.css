@@ -54,10 +54,11 @@ body[data-pos="bottom-right"] .stage {
 
 /* 吹き出し */
 
+/* しっぽ (下の三角) は中央にあり、メンダコの頭のてっぺん (左右のひれの間) を指す */
 .bubble {
   position: relative;
   max-width: 90%;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   padding: 12px 18px;
   border: 3px solid #5a2a3a;
   border-radius: 18px;
@@ -84,7 +85,7 @@ body[data-pos="bottom-right"] .stage {
   overflow-wrap: anywhere;
 }
 
-/* 仮のメンダコ */
+/* メンダコ。体は画像 (index.html の .buddy-body)、顔は SVG (.face) */
 
 .buddy {
   width: 200px;
@@ -96,18 +97,6 @@ body[data-pos="bottom-right"] .stage {
   height: auto;
 }
 
-.body {
-  fill: #f08a8a;
-  stroke: #b8545e;
-  stroke-width: 3;
-}
-
-.fin {
-  fill: #f6a8a0;
-  stroke: #b8545e;
-  stroke-width: 3;
-}
-
 .eye {
   fill: #2b1a1f;
 }
@@ -115,8 +104,7 @@ body[data-pos="bottom-right"] .stage {
 /* テンションで変わる色・目は 0.5 秒でなめらかに切り替える */
 
 .buddy-svg,
-.body,
-.fin,
+.buddy-body,
 .eyelid,
 .eyelids,
 .sparkles,
@@ -124,9 +112,10 @@ body[data-pos="bottom-right"] .stage {
   transition: fill 0.5s ease, stroke 0.5s ease, filter 0.5s ease, opacity 0.5s ease;
 }
 
-/* まぶた (Calm の半目) は体と同じ色で目の上半分を隠す */
+/* まぶた (Calm の半目) は体の画像の顔のあたりと同じ色で目の上半分を隠す。
+   体の画像を差し替えたら、この色も合わせる */
 .eyelid {
-  fill: #f08a8a;
+  fill: #fb6d6f;
 }
 
 .eyelid-line {
@@ -201,24 +190,16 @@ body[data-pos="bottom-right"] .stage {
 
 /* テンション: 動き・体の色・目を data-tension で切り替える */
 
-/* Calm: ゆっくり大きくぷかぷか。青みがかって彩度を下げ、半目 */
+/* Calm: ゆっくり大きくぷかぷか。青みがかって彩度を下げ、半目。
+   体の色は画像に filter をかけて変える。まぶたにも同じ filter をかけ、体の色とそろえる */
 
 .buddy[data-tension="calm"] {
   animation: float-calm 4s ease-in-out infinite;
 }
 
-.buddy[data-tension="calm"] .body,
+.buddy[data-tension="calm"] .buddy-body,
 .buddy[data-tension="calm"] .eyelid {
-  fill: #c9a3b8;
-}
-
-.buddy[data-tension="calm"] .body,
-.buddy[data-tension="calm"] .fin {
-  stroke: #8a6a82;
-}
-
-.buddy[data-tension="calm"] .fin {
-  fill: #d6b8c8;
+  filter: saturate(0.5) hue-rotate(-60deg) brightness(0.95);
 }
 
 .buddy[data-tension="calm"] .eyelids {
@@ -242,17 +223,8 @@ body[data-pos="bottom-right"] .stage {
   filter: drop-shadow(0 0 10px rgba(255, 196, 92, 0.85));
 }
 
-.buddy[data-tension="high"] .body {
-  fill: #ff9a70;
-}
-
-.buddy[data-tension="high"] .body,
-.buddy[data-tension="high"] .fin {
-  stroke: #c9583c;
-}
-
-.buddy[data-tension="high"] .fin {
-  fill: #ffb98a;
+.buddy[data-tension="high"] .buddy-body {
+  filter: hue-rotate(14deg) saturate(1.15) brightness(1.08);
 }
 
 .buddy[data-tension="high"] .sparkles {

@@ -174,9 +174,9 @@ def test_style_css_has_look_for_each_tension(level: str) -> None:
 
 def test_style_css_changes_color_and_eyes_by_tension() -> None:
     # Calm は色と半目、High は色と光とキラキラ
-    assert '.buddy[data-tension="calm"] .body' in STYLE_CSS
+    assert '.buddy[data-tension="calm"] .buddy-body' in STYLE_CSS
     assert '.buddy[data-tension="calm"] .eyelids' in STYLE_CSS
-    assert '.buddy[data-tension="high"] .body' in STYLE_CSS
+    assert '.buddy[data-tension="high"] .buddy-body' in STYLE_CSS
     assert '.buddy[data-tension="high"] .sparkles' in STYLE_CSS
     assert "drop-shadow" in STYLE_CSS
     assert "transition:" in STYLE_CSS
