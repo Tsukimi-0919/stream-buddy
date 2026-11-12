@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 4：T-19 のメンダコの絵の差し替え（体は AI で作った 2D 画像、顔は SVG）まで実装。OBS での見た目の手動確認（人間）待ち**
+**Phase 4：v1.0.0 のリリース準備（バージョンを 1.0.0 に、README の冒頭の案内を更新）まで実施。リリースの作成と公開（人間）待ち**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -214,10 +214,15 @@ Phase 0（設計と守りの準備）は完了。
   - 吹き出し：しっぽ（中央）が頭のてっぺん（左右のひれの間）を指すよう、下の余白を 18px → 16px にした
   - SVG の説明は `<title>メンダコ</title>`（`aria-labelledby`）。CSP（`img-src 'self'`）・インラインのスタイルなしのまま
   - exe：overlay フォルダを丸ごと同梱しているため `static/img/` も入る（ビルドスクリプトは変えていない。テストで確認）
-  - 素材のライセンス：`CREDITS.md`（新規）に出どころと加工、CC BY 4.0 を書いた。README のライセンスの節を `assets/LICENSE` と `CREDITS.md` への案内にした。`assets/LICENSE` は人間が置く（Claude Code の設定で `LICENSE` という名前のファイルを作れないため）
+  - 素材のライセンス：`CREDITS.md`（新規）に出どころと加工、CC BY 4.0 を書いた。README のライセンスの節を `assets/LICENSE` と `CREDITS.md` への案内にした。`assets/LICENSE` は人間が置いた（Claude Code の設定で `LICENSE` という名前のファイルを作れないため）
   - テスト（`tests/test_mendako_art.py`）：画像の参照と存在、PNG のヘッダー（512×512・RGBA・左上が透明・300 KB 以下。標準ライブラリだけで読む）、`image/png` とセキュリティのヘッダーでの配信、画像が `#buddy`・`.buddy-motion`・`.buddy-svg`・`.buddy-body` の中で顔のグループの外にあること、顔の部品が 1 つの `transform` のグループにあること、テンションと演出の指定が画像を含む要素に効くこと、古い体の図形がないこと、`assets/LICENSE`・`CREDITS.md`・README の記載。`tests/test_build_exe.py` に同梱の確認を追加
   - ヘッドレスの Edge で、Calm / Normal / High / 死亡 / クリアを暗い背景と明るい背景で撮り、5 つの見た目すべてで顔が体に収まっていることを確かめた（画面写真はコミットしていない）
   - 未確認：OBS での見た目、口パク、暗い・明るい背景での輪郭、200px での見やすさ（人間）
+
+- v1.0.0 のリリース準備（ブランチ `chore/release-1.0.0`）
+  - バージョンを 0.9.0 → 1.0.0 にした（`pyproject.toml`、`src/stream_buddy/__init__.py`、`uv lock` で `uv.lock`）。`--version` は `stream-buddy 1.0.0 (...)` になる
+  - README の冒頭の案内を「お試し版（v0.9.0）、メンダコの絵は仮」から「v1.0.0 を公開しています」にした。感想や不具合は Issue で受け付けること、個別のサポートはお約束できないことはそのまま
+  - 残り：GitHub Actions でのビルドとリリースの作成・公開、ダウンロードした exe での `--version` の確認（人間）
 
 ## まだないもの
 
