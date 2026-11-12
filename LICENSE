@@ -23,4 +23,4 @@ SOFTWARE.
 ---
 
 This license applies to the source code only.
-Image and audio assets under `assets/` are licensed separately; see `assets/LICENSE`.
+Image assets under `src/stream_buddy/overlay/static/img/` are licensed separately; see `assets/LICENSE`.
