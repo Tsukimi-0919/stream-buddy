@@ -460,7 +460,11 @@ def test_main_prints_only_url_and_notices(
     out = capsys.readouterr().out
     assert "/overlay?token=" in out
     # OBS を先に開いていたときの案内は、URL のあとに出す
-    notice = "OBS を先に開いていた場合は、ブラウザソースを右クリックして「更新」を押してください。"
+    # 右クリックのメニューには「更新」がないので、プロパティの中のボタンを案内する
+    notice = (
+        "OBS を先に開いていた場合は、ブラウザソースを右クリック →「プロパティ」→ "
+        "一番下の「現在のページのキャッシュを更新」を押してください。"
+    )
     assert notice in out
     assert out.index("/overlay?token=") < out.index(notice)
     # セリフや発話の内容は出さない

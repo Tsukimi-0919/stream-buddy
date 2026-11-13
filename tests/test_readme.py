@@ -64,7 +64,15 @@ def section(text: str, heading: str) -> str:
     return text[start : start + 1 + end.start()] if end else text[start:]
 
 
-REFRESH = "ブラウザソースを右クリックして「更新」を押してください"
+REFRESH = (
+    "ブラウザソースを右クリック →「プロパティ」→ "
+    "一番下の「現在のページのキャッシュを更新」を押してください"
+)
+
+
+def test_readme_does_not_mention_refresh_in_context_menu() -> None:
+    # OBS のブラウザソースの右クリックのメニューには「更新」がない
+    assert "右クリックして「更新」" not in readme()
 
 
 def test_obs_section_recommends_starting_first_and_refresh() -> None:
