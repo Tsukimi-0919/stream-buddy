@@ -162,7 +162,7 @@ def _run(
         print(e, file=sys.stderr)
         return 2
     if setup is None and config.keywords.enabled:
-        print(keywords.MISSING_MODEL_MESSAGE)
+        print(_missing_model_message(config))
 
     listener: hotkey.HotkeyListener | None = None
     microphone: audio.Microphone | None = None
@@ -220,7 +220,13 @@ def _print_url(args: argparse.Namespace, config: Config, token: str, *, created:
         print("新しいトークンを作りました。OBS の URL を設定してください。")
     print("OBS のブラウザソースに次の URL を設定してください:")
     print(server.overlay_url(config.server.port, token))
-    print("この URL を配信画面に映さないでください。", flush=True)
+    print("この URL を配信画面に映さないでください。")
+    # ページもサーバーが配るため、OBS を先に開いているとページの読み込みに失敗したままになる
+    print(
+        "OBS を先に開いていた場合は、ブラウザソースを右クリック →「プロパティ」→ "
+        "一番下の「現在のページのキャッシュを更新」を押してください。",
+        flush=True,
+    )
 
 
 def _print_debug(line: str) -> None:
@@ -236,7 +242,7 @@ def _run_test_keywords(config: Config) -> int:
         return 2
     if setup is None:
         if config.keywords.enabled:
-            print(keywords.MISSING_MODEL_MESSAGE)
+            print(_missing_model_message(config))
         print("キーワード検知が無効なため、--test-keywords は使えません。", file=sys.stderr)
         return 2
     microphone = _open_microphone(config)
@@ -249,10 +255,15 @@ def _run_test_keywords(config: Config) -> int:
         microphone.close()
 
 
+def _missing_model_message(config: Config) -> str:
+    # 探した場所 (絶対パス) を含むので、コンソールに出すだけにする
+    return keywords.missing_model_message(keywords.resolve_model_dir(config.keywords.model_dir))
+
+
 def _check_model(config: Config) -> int:
     model_dir = keywords.resolve_model_dir(config.keywords.model_dir)
-    if not model_dir.is_dir():
-        print(keywords.MISSING_MODEL_MESSAGE, file=sys.stderr)
+    if keywords.model_is_missing(model_dir):
+        print(keywords.missing_model_message(model_dir), file=sys.stderr)
         return 2
     try:
         count = keywords.verify_model(model_dir)

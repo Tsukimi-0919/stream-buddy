@@ -1,5 +1,7 @@
+import pytest
+
 from stream_buddy.state.event_fsm import EventMachine
-from stream_buddy.state.events import Effect, Hotkey, Keyword, Say, Tick
+from stream_buddy.state.events import Effect, EventKind, Hotkey, Keyword, Say, Tick
 
 
 def started_at(now: int) -> EventMachine:
@@ -127,13 +129,49 @@ def test_st26_clear_death_clear_uses_wait_per_kind() -> None:
     assert m2.step(Keyword("clear"), 11_000) == [Effect("clear"), Say("clear")]
 
 
-def test_st25_effecting_ignores_everything() -> None:
+def test_st25_effecting_ignores_keywords_and_same_kind_hotkey() -> None:
     m = started_at(1_000)
     for now, event in [
-        (1_000, Keyword("death")),
-        (2_000, Keyword("clear")),
-        (2_500, Hotkey("clear")),
+        (1_000, Keyword("death")),  # 同じ種類のキーワード
+        (2_000, Keyword("clear")),  # 違う種類のキーワード (聞き間違いで入れ替わらないように)
+        (2_500, Hotkey("death")),  # 同じ種類のホットキー (出し直さない)
         (3_999, Hotkey("death")),
     ]:
         assert m.step(event, now) == []
         assert (m.state, m.kind) == ("effecting", "death")
+    # 演出の長さは最初の開始から数えたまま
+    m.step(Tick(), 4_000)
+    assert m.state == "cooldown"
+
+
+@pytest.mark.parametrize(("first", "second"), [("death", "clear"), ("clear", "death")])
+def test_st27_other_kind_hotkey_switches_effect(first: EventKind, second: EventKind) -> None:
+    m = EventMachine()
+    m.step(Hotkey(first), 1_000)
+    assert m.step(Hotkey(second), 2_000) == [Effect(second), Say(second)]
+    assert (m.state, m.kind) == ("effecting", second)
+
+
+def test_st27_effect_time_counts_from_switch() -> None:
+    m = started_at(1_000)  # death
+    assert m.step(Hotkey("clear"), 2_500) == [Effect("clear"), Say("clear")]  # ST-27
+    # 3 秒は clear の開始 (2.5 秒) から数える
+    m.step(Tick(), 5_499)
+    assert (m.state, m.kind) == ("effecting", "clear")
+    m.step(Tick(), 5_500)
+    assert m.state == "cooldown"
+    # clear の前回の演出開始も 2.5 秒になる。death は 6 秒で 5 秒たつが、clear は 7.5 秒まで待つ
+    assert m.step(Keyword("clear"), 7_499) == []
+    m.step(Tick(), 7_499)
+    assert m.state == "cooldown"
+    m.step(Tick(), 7_500)
+    assert m.state == "ready"
+
+
+def test_st27_switch_back_and_forth() -> None:
+    m = started_at(0)  # death
+    assert m.step(Hotkey("clear"), 1_000) == [Effect("clear"), Say("clear")]
+    assert m.step(Hotkey("clear"), 1_500) == []  # 同じ種類は無視 (ST-25)
+    assert m.step(Hotkey("death"), 2_000) == [Effect("death"), Say("death")]  # ST-27
+    assert m.step(Keyword("clear"), 2_500) == []  # キーワードは無視 (ST-25)
+    assert (m.state, m.kind) == ("effecting", "death")

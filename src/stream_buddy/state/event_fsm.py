@@ -1,4 +1,4 @@
-"""イベントの状態機械 (ST-21〜ST-26、FR-07〜FR-09)。"""
+"""イベントの状態機械 (ST-21〜ST-27、FR-07〜FR-09)。"""
 
 from typing import Literal
 
@@ -29,7 +29,10 @@ class EventMachine:
                 return self._start(kind, now_ms)  # ST-24
             case Keyword(kind) if self.state == "cooldown" and self._waited(kind, now_ms):
                 return self._start(kind, now_ms)  # ST-26
-        # 待ち時間中の同じ種類のキーワードと、Effecting 中の入力 (ST-25) は無視する
+            case Hotkey(kind) if self.state == "effecting" and kind != self.kind:
+                return self._start(kind, now_ms)  # ST-27: 違う種類のホットキーで切り替える
+        # 待ち時間中の同じ種類のキーワードと、Effecting 中のキーワード・同じ種類のホットキー
+        # (ST-25) は無視する
         return []
 
     def _waited(self, kind: EventKind, now_ms: int) -> bool:

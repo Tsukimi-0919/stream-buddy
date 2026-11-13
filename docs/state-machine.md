@@ -161,7 +161,8 @@ stateDiagram-v2
     Cooldown --> Ready: ST-23 どの種類も待ち時間が終わった
     Cooldown --> Effecting: ST-24 Hotkey
     Cooldown --> Effecting: ST-26 待ち時間が終わった種類の Keyword
-    Effecting --> Effecting: ST-25 入力は無視
+    Effecting --> Effecting: ST-25 キーワードと、同じ種類の Hotkey は無視
+    Effecting --> Effecting: ST-27 違う種類の Hotkey
 ```
 
 | ID | いまの状態 | 条件 | 次の状態 | 出力 |
@@ -170,12 +171,16 @@ stateDiagram-v2
 | ST-22 | Effecting | 演出開始から 3 秒 | Cooldown | なし |
 | ST-23 | Cooldown | どの種類も、その種類の前回の演出開始から 5 秒以上 | Ready | なし |
 | ST-24 | Cooldown | `Hotkey(k)` | Effecting(k) | `Effect(k)`、`Say(k)` |
-| ST-25 | Effecting | `Keyword` または `Hotkey` | Effecting（変わらない） | なし |
+| ST-25 | Effecting(k) | `Keyword`（種類に関係なく）、または同じ種類の `Hotkey(k)` | Effecting(k)（変わらない） | なし |
 | ST-26 | Cooldown | 違う種類の `Keyword(k)`（k の前回の演出開始から 5 秒以上、または初めて） | Effecting(k) | `Effect(k)`、`Say(k)` |
+| ST-27 | Effecting(k) | 違う種類の `Hotkey(j)`（j ≠ k） | Effecting(j) | `Effect(j)`、`Say(j)` |
 
 - **ホットキーは人がわざと押すもの**なので、待ち時間（Cooldown）中でも受け付ける
 - キーワードは誤検知があり得るので、**同じ種類**は前回の演出開始から 5 秒たつまで受け付けない。違う種類は演出が終われば（3 秒後から）受け付ける
-- 演出中（Effecting）は、ホットキーも含めて無視する（演出を途中で切らない）
+- 演出中（Effecting）は、キーワードは種類に関係なく無視する（聞き間違いで演出が入れ替わらないように）。同じ種類のホットキーも無視する（演出を出し直さない）
+- 演出中でも、**違う種類のホットキー**は受け付けて、すぐその演出に切り替える（ST-27。しょんぼりの途中でクリアを押した、など）
+  - 演出の開始時刻は新しい演出の開始にする（3 秒は切り替えた時刻から数える）。新しい種類の「前回の演出開始」も更新する
+  - `death` と `clear` の吹き出しは出口（Arbiter）で必ず出すもの（`ALWAYS`）なので、切り替えたときも新しいセリフが出る
 - Cooldown にいるときは、直前の演出の種類は必ず 5 秒以内なので、ST-26 で受け付けるのは直前と違う種類だけになる
 
 | 値 | 決定 | 備考 |
@@ -183,6 +188,7 @@ stateDiagram-v2
 | 演出の長さ | 3 秒 | Phase 3 の演出のデザインで変わる可能性がある |
 | キーワードの待ち時間 | 種類ごとに 5 秒（その種類の前回の演出開始から） | 2026-10-27 に「共通で 10 秒」から変更 |
 | ホットキーの扱い | Cooldown 中も受け付ける | 連打すると演出が続くが、人の意図なのでそれでよい |
+| 演出中の違う種類のホットキー | 受け付けて切り替える | 2026-11-13 に変更（それまでは演出中はホットキーも無視していた） |
 
 ---
 
