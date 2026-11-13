@@ -51,3 +51,61 @@ def test_readme_local_images_exist() -> None:
     local = [i for i in images if not i.startswith(("http://", "https://"))]
     missing = [i for i in local if not (ROOT / i).is_file()]
     assert not missing, f"README の画像の参照先がありません: {missing}"
+
+
+# T-21：OBS を先に開いたとき・モデルの置き場所
+
+
+def section(text: str, heading: str) -> str:
+    """見出し (行全体) から、同じか上の階層の次の見出しの前までを返す。"""
+    level = len(heading) - len(heading.lstrip("#"))
+    start = text.index(f"\n{heading}\n")
+    end = re.search(rf"\n#{{1,{level}}} ", text[start + 1 :])
+    return text[start : start + 1 + end.start()] if end else text[start:]
+
+
+REFRESH = "ブラウザソースを右クリックして「更新」を押してください"
+
+
+def test_obs_section_recommends_starting_first_and_refresh() -> None:
+    obs = section(readme(), "### 6. OBS の設定")
+    assert "stream-buddy を先に起動" in obs
+    assert REFRESH in obs
+
+
+def test_model_section_has_folder_diagram() -> None:
+    model = section(readme(), "## 音声認識モデルの取得（キーワード検知を使うとき）")
+    for line in [
+        "stream-buddy\\",
+        "├─ stream-buddy.exe",
+        "├─ _internal\\",
+        "└─ models\\",
+        "└─ vosk-model-small-ja-0.22\\",
+        "├─ am\\",
+        "├─ conf\\",
+        "├─ graph\\",
+        "├─ ivector\\",
+    ]:
+        assert line in model
+    assert "1段深く" in model
+
+
+def test_troubleshooting_section_covers_refresh_and_model() -> None:
+    trouble = section(readme(), "## 困ったとき")
+    assert REFRESH in trouble
+    assert "探した場所" in trouble
+    assert "1段深く" in trouble
+
+
+def test_folder_diagram_matches_bundled_hash_list() -> None:
+    # 図の中身は、同梱したハッシュの一覧 (公式のモデルの全ファイル) の 1 段目とそろえる
+    from stream_buddy.keywords import load_hash_list
+
+    top = {rel.split("/")[0] + ("\\" if "/" in rel else "") for rel in load_hash_list()}
+    # 手順の番号の下にあるため、図は字下げされている
+    block = re.search(r"```text\n *(stream-buddy\\\n.*?)```", readme(), re.DOTALL)
+    assert block is not None
+    lines = block.group(1).splitlines()
+    model_at = next(i for i, line in enumerate(lines) if "vosk-model-small-ja-0.22\\" in line)
+    shown = {line.split("─ ")[1] for line in lines[model_at + 1 :] if "─ " in line}
+    assert shown == top

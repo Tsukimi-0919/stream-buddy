@@ -78,7 +78,7 @@ def test_scenario_st21_st25_st24_st22_st23_death_then_hotkey() -> None:
     sim.at(12_000, SpeechEnded())
     sim.at(20_000, Keyword("death"))  # ST-21
     sim.at(21_000, Keyword("death"))  # ST-25: 演出中は無視
-    sim.at(22_000, Hotkey("clear"))  # ST-25: ホットキーも無視
+    sim.at(22_000, Hotkey("death"))  # ST-25: 同じ種類のホットキーも無視
     sim.at(24_000, Keyword("death"))  # ST-22 のあと、5 秒以内の同じ種類のキーワードは無視
     sim.at(25_000, Hotkey("clear"))  # ST-24: Cooldown 中のホットキーは受け付ける
     sim.until(45_000)  # ST-23: 30 秒で Ready に戻る
@@ -97,6 +97,22 @@ def test_scenario_st21_st25_st24_st22_st23_death_then_hotkey() -> None:
         (25_000, Say("clear")),
         (38_100, Say("silence")),
     ]
+
+
+def test_scenario_st27_clear_hotkey_during_death_switches_line() -> None:
+    """しょんぼりの演出中にクリアのホットキー → すぐクリアの演出と吹き出しになる。"""
+    sim = Sim(silence_seconds=20)
+    sim.at(10_000, Hotkey("death"))  # ST-21
+    sim.at(11_000, Hotkey("clear"))  # ST-27
+    sim.at(12_000, Keyword("death"))  # ST-25: 演出中のキーワードは無視
+    sim.until(13_900)
+    assert sim.brain.event.state == "effecting"  # 3 秒はクリアの開始 (11 秒) から
+    sim.until(14_000)
+    assert sim.brain.event.state == "cooldown"
+
+    assert sim.of(Effect) == [(10_000, Effect("death")), (11_000, Effect("clear"))]
+    # death と clear の吹き出しは必ず出す (ALWAYS) ので、1 秒後でもクリアのセリフが出る
+    assert sim.of(Say) == [(10_000, Say("death")), (11_000, Say("clear"))]
 
 
 def test_scenario_st11_st13_st14_st15_silence_gives_up_and_restarts() -> None:

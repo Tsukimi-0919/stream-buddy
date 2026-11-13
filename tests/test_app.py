@@ -459,6 +459,10 @@ def test_main_prints_only_url_and_notices(
     assert main([]) == 0
     out = capsys.readouterr().out
     assert "/overlay?token=" in out
+    # OBS を先に開いていたときの案内は、URL のあとに出す
+    notice = "OBS を先に開いていた場合は、ブラウザソースを右クリックして「更新」を押してください。"
+    assert notice in out
+    assert out.index("/overlay?token=") < out.index(notice)
     # セリフや発話の内容は出さない
     lines = load_lines()
     assert not any(text in out for texts in lines.lists.values() for text in texts)

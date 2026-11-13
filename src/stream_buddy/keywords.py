@@ -62,6 +62,36 @@ def resolve_model_dir(model_dir: str) -> Path:
     return Path(model_dir) if model_dir else default_model_dir()
 
 
+def nested_model_dir(model_dir: Path) -> Path | None:
+    """1 段深く展開されたとき (models/<名前>/<名前>) の、中のフォルダ。なければ None。
+
+    調べるのは 1 段下に同じ名前のフォルダがあるかだけ。それより深くは探さない。
+    """
+    inner = model_dir / model_dir.name
+    return inner if inner.is_dir() else None
+
+
+def model_is_missing(model_dir: Path) -> bool:
+    """モデルのフォルダがない、または 1 段深く展開されていて使えないか。"""
+    return not model_dir.is_dir() or nested_model_dir(model_dir) is not None
+
+
+def missing_model_message(model_dir: Path) -> str:
+    """モデルがないときにコンソールに出す案内。探したフォルダの絶対パスを含む。
+
+    パスには個人のフォルダ名が含まれ得るので、コンソールに出すだけにする (ログには書かない)。
+    """
+    lines = [f"音声認識モデルが見つかりません。探した場所：{model_dir.absolute()}"]
+    inner = nested_model_dir(model_dir)
+    if inner is not None:
+        lines.append(
+            f"1段深く展開されているようです。{inner.absolute()} の中身を、"
+            f"1段上の {model_dir.absolute()} に移してください。"
+        )
+    lines.append(MISSING_MODEL_MESSAGE)
+    return "\n".join(lines)
+
+
 def load_hash_list(text: str | None = None) -> dict[str, str]:
     """同梱したハッシュの一覧 ({相対パス: SHA-256})。"""
     if text is None:
@@ -354,13 +384,14 @@ def prepare_keywords(
 ) -> KeywordSetup | None:
     """モデルを確かめて読み込み、文法を作る。
 
-    無効、またはモデルのフォルダがないときは None (キーワード検知なしで起動する)。
+    無効、またはモデルのフォルダがない (1 段深く展開されている場合を含む) ときは None
+    (キーワード検知なしで起動する)。
     モデルが一覧と合わない・言葉を語彙で表せないときは KeywordError (起動しない)。
     """
     if not config.enabled:
         return None
     model_dir = resolve_model_dir(config.model_dir)
-    if not model_dir.is_dir():
+    if model_is_missing(model_dir):
         return None
     verify_model(model_dir, expected)
     model = load_model(model_dir)

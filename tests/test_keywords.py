@@ -116,6 +116,14 @@ def make_fake_model(root: Path) -> tuple[Path, dict[str, str]]:
     return model, {rel: hashlib.sha256(data).hexdigest() for rel, data in files.items()}
 
 
+def make_nested_model(model_dir: Path) -> Path:
+    """1 段深く展開した置き間違い (models/<名前>/<名前>/am など) を作る。中のフォルダを返す。"""
+    inner = model_dir / keywords.MODEL_NAME
+    (inner / "am").mkdir(parents=True)
+    (inner / "am" / "final.mdl").write_bytes(b"acoustic")
+    return inner
+
+
 def test_bundled_hash_list_matches_adr_0003() -> None:
     expected = load_hash_list()
     assert len(expected) == 16
@@ -587,20 +595,92 @@ def test_check_model_tampered(
     assert "改ざんされているおそれ" in capsys.readouterr().err
 
 
-def test_check_model_missing(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+def test_check_model_missing(
+    no_real_model: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
     assert main(["--check-model", "--config", str(tmp_path / "none.toml")]) == 2
-    assert "モデルがないため" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "モデルがないため" in err
+    assert f"探した場所：{no_real_model.absolute()}" in err
+    assert "1段深く" not in err
+
+
+def test_check_model_nested_folder(
+    no_real_model: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    # models\vosk-model-small-ja-0.22\vosk-model-small-ja-0.22\am のような置き間違い
+    inner = make_nested_model(no_real_model)
+    assert main(["--check-model", "--config", str(tmp_path / "none.toml")]) == 2
+    err = capsys.readouterr().err
+    assert f"探した場所：{no_real_model.absolute()}" in err
+    assert "1段深く展開されているようです" in err
+    assert str(inner.absolute()) in err
+    # 改ざんとは扱わない
+    assert "改ざん" not in err
+
+
+def test_check_model_uses_configured_dir_in_message(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    missing = tmp_path / "elsewhere" / "my-model"
+    config = write_config(tmp_path, f"[keywords]\nmodel_dir = '{missing}'\n")
+    assert main(["--check-model", "--config", str(config)]) == 2
+    assert f"探した場所：{missing.absolute()}" in capsys.readouterr().err
+
+
+def test_missing_model_message_looks_only_one_level_down(tmp_path: Path) -> None:
+    model_dir = tmp_path / keywords.MODEL_NAME
+    # 2 段下にあっても探さない
+    (model_dir / "x" / keywords.MODEL_NAME).mkdir(parents=True)
+    assert keywords.nested_model_dir(model_dir) is None
+    assert "1段深く" not in keywords.missing_model_message(model_dir)
+    (model_dir / keywords.MODEL_NAME).mkdir()
+    assert keywords.nested_model_dir(model_dir) == model_dir / keywords.MODEL_NAME
+    assert keywords.model_is_missing(model_dir)
+
+
+def test_prepare_nested_model_folder_returns_none(no_real_model: Path) -> None:
+    make_nested_model(no_real_model)
+    loaded: list[Path] = []
+
+    def load(path: Path) -> FakeModel:
+        loaded.append(path)
+        return FakeModel()
+
+    # 改ざん (KeywordError) とは扱わず、モデルなしとして起動する
+    assert prepare_keywords(KeywordsConfig(), load_model=load) is None
+    assert loaded == []
 
 
 def test_main_without_model_starts_without_keywords(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    no_real_model: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     calls: list[object] = []
     monkeypatch.setattr(main_module.server, "serve", lambda *a, **kw: calls.append(kw))
     monkeypatch.chdir(tmp_path)
     assert main([]) == 0
     assert len(calls) == 1
-    assert keywords.MISSING_MODEL_MESSAGE in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert keywords.MISSING_MODEL_MESSAGE in out
+    assert f"探した場所：{no_real_model.absolute()}" in out
+
+
+def test_main_nested_model_starts_without_keywords(
+    no_real_model: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    make_nested_model(no_real_model)
+    calls: list[object] = []
+    monkeypatch.setattr(main_module.server, "serve", lambda *a, **kw: calls.append(kw))
+    monkeypatch.chdir(tmp_path)
+    assert main([]) == 0
+    assert len(calls) == 1
+    assert "1段深く展開されているようです" in capsys.readouterr().out
 
 
 def test_main_disabled_keywords_says_nothing(

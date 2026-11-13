@@ -82,6 +82,9 @@ zip を好きなフォルダに展開します（日本語を含むフォルダ�
 
 - URL にはトークン（合言葉）が含まれます。[注意事項](#注意事項)を必ず読んでください
 - メンダコの置き場所は [`&pos=`](#メンダコの置き場所pos) で選べます
+- **stream-buddy を先に起動してから OBS を開く**のがおすすめです
+  - ページ（メンダコの絵を含む）も stream-buddy が配っているため、OBS を先に開いていると、ページを読み込めないままになります
+  - OBS を先に開いていて、メンダコが出ないときは、ブラウザソースを右クリックして「更新」を押してください
 
 ## プライバシー
 
@@ -100,6 +103,21 @@ stream-buddy はモデルを自動ではダウンロードしません。次の�
 1. Vosk の公式サイト <https://alphacephei.com/vosk/models> から `vosk-model-small-ja-0.22` の zip をダウンロードする
 2. `stream-buddy.exe` と同じフォルダに `models` フォルダを作り、その中に展開する
    （`models\vosk-model-small-ja-0.22\am` などのフォルダができれば正しい場所です）
+
+   ```text
+   stream-buddy\
+   ├─ stream-buddy.exe
+   ├─ _internal\
+   └─ models\
+      └─ vosk-model-small-ja-0.22\
+         ├─ am\
+         ├─ conf\
+         ├─ graph\
+         ├─ ivector\
+         └─ README
+   ```
+
+   - 展開のしかたによっては、`models\vosk-model-small-ja-0.22\vosk-model-small-ja-0.22\am` のように**1段深く**なることがあります。そのときは、中の `vosk-model-small-ja-0.22` フォルダの中身を1段上に移してください
 3. `stream-buddy --check-model` を実行し、「公式に配布されたものと一致しました」と出ることを確かめる
 
 - 別の場所に置くときは、設定ファイルの `[keywords] model_dir` に絶対パスで指定します
@@ -192,6 +210,19 @@ OBS のブラウザソースの URL の末尾に `&pos=` を付けると、ペ�
 4. `stream-buddy.exe --version` で、新しいバージョンになったことを確かめる（例：`stream-buddy 0.1.0 (b12307a, 2026-11-05)`）
 
 - URL のトークンは exe のフォルダではなく `%LOCALAPPDATA%\stream-buddy` に保存しているため、**更新しても OBS の URL は変わりません**
+
+## 困ったとき
+
+### メンダコが OBS に出ない
+
+- OBS を先に開いていたときは、ブラウザソースを右クリックして「更新」を押してください（[OBS の設定](#6-obs-の設定)）
+- stream-buddy のコンソールに、エラーが出ていないか確かめてください
+
+### 「音声認識モデルが見つかりません」と出る
+
+- メッセージの「探した場所」に、モデルのフォルダ（中に `am`・`conf`・`graph` などがあるフォルダ）を置いてください（[音声認識モデルの取得](#音声認識モデルの取得キーワード検知を使うとき)のフォルダの図）
+- 「1段深く展開されているようです」と出たときは、中の `vosk-model-small-ja-0.22` フォルダの中身を1段上に移してください
+- 置いたら `stream-buddy --check-model` で確かめられます
 
 ## セキュリティ
 
