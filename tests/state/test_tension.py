@@ -53,7 +53,9 @@ def test_st01_just_below_threshold_stays_calm() -> None:
     t = Tension(start_ms=0, **V1_0)
     t.step(SpeechStarted(), 0)
     t.step(SpeechEnded(), 10_499)
-    assert t.step(Tick(), 10_500) == []
+    # 話し終わって 1 秒未満は、次の話し始めを待つ間として話していたとみなす (T-23)。
+    # 1 秒たって話し始めなければ、話していたのは 10.499 秒だけ (35 未満) なので Calm のまま
+    assert t.step(Tick(), 11_499) == []
     assert t.level == "calm"
 
 

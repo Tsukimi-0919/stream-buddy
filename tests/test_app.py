@@ -502,7 +502,9 @@ def test_demo_flow_reaches_high_clear_silence_and_death() -> None:
 
 def test_demo_uses_silence_seconds() -> None:
     assert demo.cycle_ms(60) - demo.cycle_ms(20) == 40_000
-    sim = Sim(silence_seconds=5)
+    # 既定のテンションの設定 (窓 15 秒・待ち 3 秒) で確かめる。窓 30 秒だと、間をつないで High が
+    # 長く続き、36 秒の盛り上げのセリフから 3 秒以内の沈黙のセリフは出口で捨てられる (T-23)
+    sim = Sim(silence_seconds=5, tension=TensionConfig())
     for at, event in demo.demo_script(5):
         sim.at(at, event)
     sim.at(demo.cycle_ms(5))
