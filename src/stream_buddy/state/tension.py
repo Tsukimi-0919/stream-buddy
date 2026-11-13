@@ -35,9 +35,23 @@ class _Bonus:
 class Tension:
     """話している割合とイベントの補正から、Calm / Normal / High を決める。"""
 
-    def __init__(self, start_ms: int) -> None:
+    def __init__(
+        self,
+        start_ms: int,
+        *,
+        window_ms: int = c.TENSION_WINDOW_MS,
+        hold_ms: int = c.TENSION_HOLD_MS,
+    ) -> None:
+        """window_ms は話していた割合を数える窓、hold_ms は変わったあと変えない時間。
+
+        どちらも設定の [tension] から渡す (既定値は constants の値)。
+        """
+        if window_ms <= 0 or hold_ms < 0:
+            raise ValueError("window_ms は正、hold_ms は 0 以上にしてください")
+        self._window_ms = window_ms
+        self._hold_ms = hold_ms
         self.level: TensionLevel = "calm"
-        # 起動直後も TENSION_HOLD_MS は変えない
+        # 起動直後も hold_ms は変えない
         self._last_change_ms = start_ms
         # 話していた区間 (開始, 終了)。終了が None なら話している最中
         self._spans: list[tuple[int, int | None]] = []
@@ -72,7 +86,7 @@ class Tension:
 
         状態は変えない (窓の外のものは 0 として数えるだけで、捨てない)。
         """
-        window_start = now_ms - c.TENSION_WINDOW_MS
+        window_start = now_ms - self._window_ms
         spoken = 0
         for start, end in self._spans:
             # 話している最中は「今」までを数える
@@ -80,7 +94,7 @@ class Tension:
             spoken += max(0, end_ms - max(start, window_start))
         bonus = sum(b.value_at(now_ms) for b in self._bonuses)
         # 割り算は 1 回だけにし、しきい値ちょうどで誤差が出ないようにする
-        return spoken * 100 / c.TENSION_WINDOW_MS, bonus
+        return spoken * 100 / self._window_ms, bonus
 
     @property
     def last_change_ms(self) -> int:
@@ -92,7 +106,7 @@ class Tension:
         return bool(self._spans) and self._spans[-1][1] is None
 
     def _forget(self, now_ms: int) -> None:
-        window_start = now_ms - c.TENSION_WINDOW_MS
+        window_start = now_ms - self._window_ms
         self._spans = [s for s in self._spans if s[1] is None or s[1] > window_start]
         self._bonuses = [b for b in self._bonuses if now_ms - b.start_ms < c.BONUS_DECAY_MS]
 
@@ -103,7 +117,7 @@ class Tension:
         return outputs
 
     def _change_level(self, now_ms: int) -> list[Output]:
-        if now_ms - self._last_change_ms < c.TENSION_HOLD_MS:
+        if now_ms - self._last_change_ms < self._hold_ms:
             return []
         value = self.score(now_ms)
         match self.level:

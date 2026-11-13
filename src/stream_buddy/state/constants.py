@@ -7,12 +7,13 @@
 TICK_MS = 100
 
 # テンション (ST-01〜ST-05)
-TENSION_WINDOW_MS = 30_000  # 話していた割合を数える窓
+# 窓と待ちは設定の [tension] で変えられる。ここは既定値 (2026-11-13 に 30 秒・5 秒から変更)
+TENSION_WINDOW_MS = 15_000  # 話していた割合を数える窓
 CALM_TO_NORMAL = 35  # ST-01: これ以上で Normal へ
 NORMAL_TO_CALM = 20  # ST-02: これ未満で Calm へ
 NORMAL_TO_HIGH = 70  # ST-03: これ以上で High へ
 HIGH_TO_NORMAL = 50  # ST-04: これ未満で Normal へ
-TENSION_HOLD_MS = 5_000  # 状態を変えたあと (と起動直後)、変えない時間
+TENSION_HOLD_MS = 3_000  # 状態を変えたあと (と起動直後)、変えない時間
 CLEAR_BONUS = 30  # クリアの加点
 DEATH_BONUS = -30  # 死亡の減点
 BONUS_DECAY_MS = 10_000  # 加点・減点が直線的に 0 に戻るまでの時間

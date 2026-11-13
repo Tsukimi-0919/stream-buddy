@@ -5,7 +5,7 @@
 
 ## 現在のフェーズ
 
-**Phase 4：v1.1.0 のリリース準備（T-22）まで実施。タグの作成とリリースの公開（人間）待ち**
+**v1.1.0 を公開。v1.2.0 に向けて、テンションの反応の速さを設定で変えられるようにした（T-23）。手動確認（人間）待ち**
 
 Phase 0（設計と守りの準備）は完了。
 
@@ -254,13 +254,24 @@ Phase 0（設計と守りの準備）は完了。
   - テスト（`tests/test_readme.py`）：冒頭の案内のバージョンと `__version__`、タスクバーの制限、`ie4uinit.exe -show`、v1.0.0 からの更新の案内
   - 残り：タグ `v1.1.0` の作成、GitHub Actions でのビルドとリリースの公開、ダウンロードした exe での確認（人間）
 
+- T-23：テンションの反応を速くし、設定で変えられるようにする（ブランチ `feat/tension-response`。v1.2.0 向け）
+  - 設定に `[tension]` を追加（`config.py` の `TensionConfig`）：`window_seconds`（5〜60、既定 15）、`hold_seconds`（1〜10、既定 3）。範囲外・型の違い・知らない項目はほかの項目と同じ形のエラー。`[tension]` がない古い `config.toml` は既定値で起動する。`config.example.toml` に説明つきで追加
+  - 既定値は仮（人が試して、リリース準備で決め直すことがある）
+  - 状態機械：`Tension` に `window_ms`・`hold_ms`、`Brain` に `tension_window_ms`・`tension_hold_ms` のキーワード引数を足した。既定値は `state/constants.py` の `TENSION_WINDOW_MS`・`TENSION_HOLD_MS`（15 秒・3 秒に変更）。`Engine` が設定を秒 → ミリ秒にして渡す。しきい値・補正・盛り上げのセリフの間隔は変えていない。純粋な状態機械のまま
+  - `--debug` のとき、起動時に `[debug] テンション：窓 15 秒、変化のあと 3 秒は変えない` の形の行を 1 回出す（`app.format_tension_settings`、`__main__` で出す。デモでも同じ）
+  - `docs/state-machine.md` の「1. テンション」：窓と待ちを「設定で変えられる（既定 15 秒・3 秒）」に、決定の表に変更の理由、窓 30 秒と 15 秒の比較の表を追加。README の「確認用の表示」に `[tension]` の説明
+  - テスト：`tests/state/test_tension_window.py`（新規。窓 15 秒・待ち 3 秒で 5.3 秒に Normal・10.5 秒に High、黙って 7.6 秒後に Normal・12.1 秒後に Calm、変化のあと 3 秒は変えない、窓を変えても 0〜100、30 秒・5 秒で今までと同じ）、`tests/test_config.py`（既定値、範囲の端、範囲外、`[tension]` がないとき）、`tests/test_app.py`（`--debug` の行、Engine が設定を渡す、既定値などでデモが High まで行く）、`tests/test_readme.py`
+    - 今までのテスト（`test_tension.py`・`test_brain.py`・`test_app.py`・`test_stream_log.py`）は、窓 30 秒・待ち 5 秒を渡す形にして、時刻はそのまま残した
+  - わかったこと：デモ（`--demo`）で話す時間は約 28 秒なので、窓を 40 秒以上にするとデモでは High に届かない（既定の 15 秒と 30 秒では届く）
+  - 未確認：`uv run stream-buddy --debug` で話したときの変わる早さ、`window_seconds` を 10・15・20 などにしたときの合い方、High から戻るのが早すぎてばたばたしないか（人間）
+
 ## まだないもの
 
 - CPU 使用率の計測（NFR-01）
 
 ## 残っている課題（v1.1.0 の時点）
 
-- テンションの反応の遅れ（測ってから直す）
+- テンションの反応の遅れ → T-23 で設定で変えられるようにした（既定値は試してから決める）
 - OBS を先に開いたときの根本的な対策（待ち合わせのページ。OBS のローカルファイルで URL のクエリが使えるかを、先に試す）
 - タスクバーのアイコン（通知領域に出す案）
 - 読み上げ（v1.2 以降の候補。ADR 0005）

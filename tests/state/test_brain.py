@@ -20,8 +20,16 @@ TICK = 100
 
 
 class Sim:
-    def __init__(self, silence_seconds: int) -> None:
-        self.brain = Brain(start_ms=0, silence_seconds=silence_seconds)
+    def __init__(
+        self, silence_seconds: int, *, window_ms: int = 30_000, hold_ms: int = 5_000
+    ) -> None:
+        # 既定は v1.1.0 までの窓 30 秒・待ち 5 秒 (このファイルの時刻はその値で決めてある)
+        self.brain = Brain(
+            start_ms=0,
+            silence_seconds=silence_seconds,
+            tension_window_ms=window_ms,
+            tension_hold_ms=hold_ms,
+        )
         self.now = 0
         self.log: list[tuple[int, Output]] = []
 

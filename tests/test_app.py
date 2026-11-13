@@ -21,7 +21,7 @@ import stream_buddy.__main__ as main_module
 from stream_buddy import app, demo, server
 from stream_buddy.__main__ import main
 from stream_buddy.audio import BLOCK_SIZE, Microphone
-from stream_buddy.config import AudioConfig, Config, SilenceConfig
+from stream_buddy.config import AudioConfig, Config, SilenceConfig, TensionConfig
 from stream_buddy.keywords import Grammar, KeywordSetup
 from stream_buddy.lines import load_lines
 from stream_buddy.protocol import SERVER_MESSAGE_TYPES, ServerMessage
@@ -40,12 +40,22 @@ def rng(seed: int = 0) -> random.Random:
     return random.Random(seed)  # noqa: S311  テストで結果を固定するための乱数 (暗号用途ではない)
 
 
+# v1.1.0 までの窓 30 秒・待ち 5 秒。このファイルの時刻はその値で決めてある
+V1_0_TENSION = TensionConfig(window_seconds=30, hold_seconds=5)
+
+
 class Sim:
     """差し替えた時計で Engine を動かす。100 ms ごとに Tick を入れて、配信の流れを再現する。"""
 
-    def __init__(self, silence_seconds: int = 20, *, debug: bool = False) -> None:
+    def __init__(
+        self,
+        silence_seconds: int = 20,
+        *,
+        debug: bool = False,
+        tension: TensionConfig = V1_0_TENSION,
+    ) -> None:
         self.now = 0
-        config = Config(silence=SilenceConfig(seconds=silence_seconds))
+        config = Config(silence=SilenceConfig(seconds=silence_seconds), tension=tension)
         # --debug の行は、出したときの時刻とともに集める
         self.debug: list[tuple[int, str]] = []
         self.engine = app.Engine(
@@ -527,6 +537,30 @@ def test_demo_flow_sends_calm_normal_and_high() -> None:
     assert levels[-1] == "calm"  # 次の繰り返しも Calm から始まる
 
 
+@pytest.mark.parametrize(("window", "hold"), [(15, 3), (5, 1), (30, 5)])
+def test_demo_flow_with_tension_settings(window: int, hold: int) -> None:
+    # 既定 (窓 15 秒・待ち 3 秒)、短い端、v1.1.0 までの値で、デモで High・演出・セリフが出る。
+    # 窓を長くする (40 秒以上など) と、デモで話す約 28 秒では High に届かない
+    sim = Sim(silence_seconds=20, tension=TensionConfig(window_seconds=window, hold_seconds=hold))
+    for at, event in demo.demo_script(20):
+        sim.at(at, event)
+    sim.at(demo.cycle_ms(20))
+    levels = [p["level"] for _, p in sim.of("tension")]
+    assert {"normal", "high"} <= set(levels)
+    assert {p["kind"] for _, p in sim.of("effect")} == {"death", "clear"}
+    assert sim.says("tension.high.")
+    assert sim.says("silence.")
+    if window <= 15:
+        assert levels[-1] == "calm"  # 次の繰り返しも Calm から始まる
+
+
+def test_engine_passes_tension_settings_to_brain() -> None:
+    sim = Sim(tension=TensionConfig(window_seconds=15, hold_seconds=3))
+    sim.at(0, ev.SpeechStarted())
+    sim.at(15_000)
+    assert sim.of("tension") == [(5_300, {"level": "normal"}), (10_500, {"level": "high"})]
+
+
 # --debug
 
 PERIODIC = re.compile(
@@ -535,6 +569,49 @@ PERIODIC = re.compile(
     r"沈黙: (Listening|Waiting|GaveUp) \d回 イベント: (Ready|Effecting|Cooldown)"
 )
 CHANGE = re.compile(r"\[debug\] テンション (calm|normal|high) → (calm|normal|high)")
+# 起動時に 1 回だけ出す、テンションの窓と待ちの秒数 (T-23)
+SETTINGS = re.compile(r"\[debug\] テンション：窓 \d{1,2} 秒、変化のあと \d{1,2} 秒は変えない")
+
+
+def test_format_tension_settings() -> None:
+    assert app.format_tension_settings(TensionConfig()) == (
+        "[debug] テンション：窓 15 秒、変化のあと 3 秒は変えない"
+    )
+    line = app.format_tension_settings(TensionConfig(window_seconds=60, hold_seconds=10))
+    assert line == "[debug] テンション：窓 60 秒、変化のあと 10 秒は変えない"
+    assert SETTINGS.fullmatch(line)
+
+
+@pytest.mark.parametrize(
+    ("toml", "expected"),
+    [
+        ("", "窓 15 秒、変化のあと 3 秒"),
+        ("[tension]\nwindow_seconds = 20\nhold_seconds = 4\n", "窓 20 秒、変化のあと 4 秒"),
+    ],
+)
+def test_main_debug_prints_tension_settings_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    toml: str,
+    expected: str,
+) -> None:
+    monkeypatch.setattr(server, "serve", lambda *a, **kw: None)
+    config = tmp_path / "config.toml"
+    config.write_text(toml, encoding="utf-8")
+    assert main(["--demo", "--debug", "--config", str(config)]) == 0
+    lines = [line for line in capsys.readouterr().out.splitlines() if SETTINGS.fullmatch(line)]
+    assert len(lines) == 1
+    assert expected in lines[0]
+
+
+def test_main_without_debug_does_not_print_tension_settings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(server, "serve", lambda *a, **kw: None)
+    monkeypatch.chdir(tmp_path)
+    assert main(["--demo"]) == 0
+    assert "テンション：窓" not in capsys.readouterr().out
 
 
 def test_debug_prints_state_every_2s() -> None:
@@ -623,7 +700,9 @@ def test_main_demo_with_and_without_debug(
     debug_lines = [line for line in out.splitlines() if line.startswith("[debug]")]
     if debug:
         assert debug_lines
-        assert all(PERIODIC.fullmatch(line) or CHANGE.fullmatch(line) for line in debug_lines)
+        # 起動時の設定の行が最初に 1 回、あとは形が決まった行だけ
+        assert SETTINGS.fullmatch(debug_lines[0])
+        assert all(PERIODIC.fullmatch(line) or CHANGE.fullmatch(line) for line in debug_lines[1:])
         token = out.split("/overlay?token=")[1].split()[0]
         assert not any(token in line for line in debug_lines)
     else:

@@ -146,3 +146,18 @@ def test_update_section_says_config_is_compatible_with_1_0_0() -> None:
     update = section(readme(), "## 更新するとき")
     assert "v1.0.0 から v1.1.0" in update
     assert "そのまま使えます" in update
+
+
+# T-23：テンションの反応の速さ
+
+
+def test_tension_settings_example_matches_defaults() -> None:
+    import tomllib
+
+    from stream_buddy.config import Config
+
+    blocks = re.findall(r"```toml\n(\[tension\]\n.*?)```", readme(), re.DOTALL)
+    assert len(blocks) == 1
+    example = tomllib.loads(blocks[0])["tension"]
+    assert example == Config().tension.model_dump()
+    assert "window_seconds = 30" in readme()  # v1.1.0 までの動きに戻す方法
