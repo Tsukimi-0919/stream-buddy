@@ -234,6 +234,18 @@ Phase 0（設計と守りの準備）は完了。
   - 未確認：OBS を先に開いてからの「現在のページのキャッシュを更新」でメンダコが出ること、F9 の演出中の F10、モデルのフォルダ名を変えたときの表示（人間）
   - 残り：OBS を先に開いたときの根本的な対策（ADR にするかは人間が決める）
 
+- T-20：アプリのアイコン（ブランチ `feat/app-icon`。v1.1.0 向け）
+  - `scripts/make_icon.py`（新規）：ページの `index.html`（`class="face"` の `transform`、目の円、閉じた口の曲線）と `style.css`（目と口の色、口の線の太さ）を読み取り、Pillow で体の画像に Normal の顔を重ねる。体の不透明な部分を囲む正方形（余白 2%）で切り出し、背景は透明。外部とは通信しない
+    - 16・24・32 px は、目の半径をそれぞれ 1.9・1.6・1.35 倍、口の線を 2.6・2.0・1.6 倍にした（`SMALL_SIZE_BOOST`）
+  - `assets/icon/stream-buddy.ico`（16・24・32・48・64・128・256 px）と確認用の `assets/icon/stream-buddy-256.png` をコミット。絵を変えたときだけ作り直す（`docs/build.md` に手順）
+  - `scripts/build_exe.py`：PyInstaller に `--icon assets/icon/stream-buddy.ico` を渡す。ファイルがないときはビルドしない
+  - 依存：`build` グループに `pillow` を追加（本体と `dev` には入れていない）
+  - `CREDITS.md` にアイコンの項目（体の画像から作成、顔は SVG と同じ、CC BY 4.0）
+  - テスト（`tests/test_app_icon.py`、`tests/test_build_exe.py`）：ICO のヘッダーと各サイズの透明・不透明な部分（標準ライブラリで PNG を読む）、確認用の PNG、`make_icon.py` にネットワークの import がないこと、`CREDITS.md` の記載、`--icon` の指定とアイコンがないときの失敗
+  - onedir でビルドし、ICO の 7 サイズの画像がそのまま exe に入っていることを確かめた（エクスプローラーでの表示は未確認）
+  - 未確認：エクスプローラー・タスクバー・ショートカットでの表示（人間）
+  - 残り：`assets/LICENSE` の対象に `assets/icon/` を加える（人間）
+
 ## まだないもの
 
 - CPU 使用率の計測（NFR-01）

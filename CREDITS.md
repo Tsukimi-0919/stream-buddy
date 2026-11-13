@@ -8,6 +8,7 @@ stream-buddy で使っている素材と、その出どころ・ライセンス�
 | ファイル | 作成 | 加工 | ライセンス |
 | --- | --- | --- | --- |
 | `src/stream_buddy/overlay/static/img/mendako-body.png`（メンダコの体） | ChatGPT（OpenAI）の画像生成で作成（2026-11-12） | 背景以外を完全に不透明にし、512×512 に縮小した | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)、表記は「Tsukimi-0919」 |
+| `assets/icon/stream-buddy.ico`・`assets/icon/stream-buddy-256.png`（exe のアイコン） | `mendako-body.png` に、ページの SVG と同じ顔（Normal の目と閉じた口）を `scripts/make_icon.py` で重ねて作成 | 体の部分を正方形に切り出して 16〜256 px に縮小。16・24・32 px は目を大きく、口の線を太くした | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)、表記は「Tsukimi-0919」（体の画像から作ったため） |
 
 - 既存のキャラクターに似せたものではありません（プロンプトに既存の作品名・キャラクター名は使っていません）
 - 地域によっては、AI で作成した画像に著作権が認められない場合があります

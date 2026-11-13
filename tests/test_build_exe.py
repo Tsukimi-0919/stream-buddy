@@ -119,6 +119,25 @@ def test_build_info_is_bundled_as_package_data(
     assert f"{build_exe.BUILD_INFO_FILE}:stream_buddy/data" in args
 
 
+def test_icon_is_passed_to_pyinstaller(
+    build_exe: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(build_exe, "portaudio_dll", lambda: tmp_path / "portaudio.dll")
+    args = build_exe.pyinstaller_args("onedir")
+    icon = build_exe.ROOT / "assets" / "icon" / "stream-buddy.ico"
+    assert icon == build_exe.ICON_FILE
+    assert args[args.index("--icon") + 1] == str(icon)
+
+
+def test_build_fails_without_icon(
+    build_exe: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(build_exe, "portaudio_dll", lambda: tmp_path / "portaudio.dll")
+    monkeypatch.setattr(build_exe, "ICON_FILE", tmp_path / "missing.ico")
+    with pytest.raises(build_exe.BuildError, match="アイコンが見つかりません"):
+        build_exe.pyinstaller_args("onedir")
+
+
 def test_overlay_images_are_bundled_with_overlay(
     build_exe: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

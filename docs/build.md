@@ -32,6 +32,21 @@ uv run --group build python scripts/build_exe.py --mode onefile
   - 配る exe は、コミットしてから（`+dirty` が付かない状態で）ビルドする
 - UPX による圧縮は使わない。音声認識のモデルとスパイクの依存、テストの依存（pytest・mypy）は含めない
 - `dist/` と `build/` は `.gitignore` 済み
+- exe のアイコンは `assets/icon/stream-buddy.ico` を PyInstaller の `--icon` に渡す。ファイルがないときはビルドしない（終了コード 1）
+
+### アイコンの作り直し方
+
+アイコン（`assets/icon/stream-buddy.ico` と確認用の `stream-buddy-256.png`）はコミットしてあり、ビルドのたびには作らない。
+メンダコの体の画像（`overlay/static/img/mendako-body.png`）や、ページの顔（`overlay/index.html` の `class="face"` の部品、`static/style.css` の目と口の色・線の太さ）を変えたときだけ、次を実行してできたファイルをコミットする。
+
+```
+uv run --group build python scripts/make_icon.py
+```
+
+- ページの HTML と CSS から顔の位置・大きさ・色を読み取り、Pillow で体の画像に重ねて描く（Normal の表情、口は閉じた状態、背景は透明）
+- 16・24・32・48・64・128・256 px を 1 つの ICO に入れる。16・24・32 px は目を大きく、口の線を太くする（`SMALL_SIZE_BOOST`）
+- 作り直したら `stream-buddy-256.png` と、16・32 px の見え方を目で確かめる。`uv run pytest tests/test_app_icon.py` でサイズと透明な部分を確かめられる
+- 外部とは通信しない
 
 ## 2. 動作確認
 
