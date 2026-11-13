@@ -9,6 +9,7 @@ from stream_buddy.config import (
     UTF8_BOM,
     Config,
     ConfigError,
+    TensionConfig,
     _format_errors,
     load_config,
 )
@@ -274,3 +275,62 @@ def test_config_is_frozen() -> None:
         config.server = config.server  # type: ignore[misc]
     with pytest.raises(AttributeError):
         config.keywords.death.append("x")  # type: ignore[attr-defined]
+
+
+# [tension] (T-23)
+
+
+def test_tension_defaults_match_state_constants() -> None:
+    from stream_buddy.state import constants as c
+
+    tension = Config().tension
+    assert (tension.window_seconds, tension.hold_seconds) == (15, 3)
+    assert tension.window_seconds * 1000 == c.TENSION_WINDOW_MS
+    assert tension.hold_seconds * 1000 == c.TENSION_HOLD_MS
+
+
+def test_config_without_tension_section_uses_defaults(tmp_path: Path) -> None:
+    # v1.1.0 までの config.toml ([tension] がない) でも起動できる
+    old = EXAMPLE.read_text(encoding="utf-8").split("[tension]")[0]
+    assert "[silence]" in old
+    config = load_config(write_config(tmp_path, old))
+    assert (config.tension.window_seconds, config.tension.hold_seconds) == (15, 3)
+
+
+@pytest.mark.parametrize(("window", "hold"), [(5, 1), (30, 10), (15, 3)])
+def test_tension_range_edges(tmp_path: Path, window: int, hold: int) -> None:
+    text = f"[tension]\nwindow_seconds = {window}\nhold_seconds = {hold}\n"
+    config = load_config(write_config(tmp_path, text))
+    assert (config.tension.window_seconds, config.tension.hold_seconds) == (window, hold)
+
+
+@pytest.mark.parametrize(
+    ("text", "key", "low", "high"),
+    [
+        ("window_seconds = 4", "window_seconds", 5, 30),
+        ("window_seconds = 31", "window_seconds", 5, 30),
+        ("hold_seconds = 0", "hold_seconds", 1, 10),
+        ("hold_seconds = 11", "hold_seconds", 1, 10),
+    ],
+)
+def test_tension_out_of_range(tmp_path: Path, text: str, key: str, low: int, high: int) -> None:
+    message = load_error(tmp_path, f"[tension]\n{text}\n")
+    assert f"[tension] {key}" in message
+    assert f"{low}〜{high} の範囲で指定してください" in message
+
+
+def test_tension_wrong_type_and_unknown_key(tmp_path: Path) -> None:
+    assert "[tension] window_seconds" in load_error(tmp_path, "[tension]\nwindow_seconds = 15.5\n")
+    assert "[tension] window は知らない項目です" in load_error(tmp_path, "[tension]\nwindow = 15\n")
+
+
+def test_tension_ranges_in_example_match_config() -> None:
+    # config.example.toml の説明の範囲が、config.py の範囲とそろっている
+    example = EXAMPLE.read_text(encoding="utf-8")
+    assert "window_seconds = 15          # 5〜30。" in example
+    assert "hold_seconds = 3             # 1〜10。" in example
+    for value in (5, 30):
+        assert TensionConfig(window_seconds=value).window_seconds == value
+    for value in (4, 31):
+        with pytest.raises(ValidationError):
+            TensionConfig(window_seconds=value)

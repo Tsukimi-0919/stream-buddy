@@ -145,6 +145,8 @@ def _run(
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     engine = app.Engine(config, book, debug=_print_debug if args.debug else None, log=log)
+    if args.debug:
+        _print_debug(app.format_tension_settings(config.tension))
 
     # デモのときはマイクも音声認識もホットキーも使わず、偽の入力を Brain に入れる
     if args.demo:

@@ -10,7 +10,14 @@ import pytest
 
 from stream_buddy import app, demo, server, stream_log
 from stream_buddy.__main__ import main
-from stream_buddy.config import Config, ConfigError, LogConfig, SilenceConfig, load_config
+from stream_buddy.config import (
+    Config,
+    ConfigError,
+    LogConfig,
+    SilenceConfig,
+    TensionConfig,
+    load_config,
+)
 from stream_buddy.lines import load_lines
 from stream_buddy.protocol import ServerMessage
 from stream_buddy.state import events as ev
@@ -342,7 +349,11 @@ class LoggedSim:
         self.clock = FakeClock()
         self.log = open_log(folder, self.clock, include_keyword=include_keyword)
         self.engine = app.Engine(
-            Config(silence=SilenceConfig(seconds=20)),
+            # 時刻は v1.1.0 までの窓 30 秒・待ち 5 秒で決めてある
+            Config(
+                silence=SilenceConfig(seconds=20),
+                tension=TensionConfig(window_seconds=30, hold_seconds=5),
+            ),
             load_lines(),
             clock=lambda: self.now,
             log=self.log,

@@ -82,6 +82,16 @@ class SilenceConfig(_Section):
     seconds: Annotated[int, AfterValidator(_in_range(5, 600))] = 20
 
 
+class TensionConfig(_Section):
+    """テンションの反応の速さ (T-23)。既定値は state/constants.py の値と同じ。"""
+
+    # 話していた割合を数える秒数。短いほど早く反応する
+    # 上限は 30 (v1.1.0 までの窓)。それより長いと反応が遅すぎ、デモでも High に届かない
+    window_seconds: Annotated[int, AfterValidator(_in_range(5, 30))] = 15
+    # テンションが変わったあと、次に変えない秒数
+    hold_seconds: Annotated[int, AfterValidator(_in_range(1, 10))] = 3
+
+
 # ホットキーに使える修飾キー (正規の書き方の順) とキー (SR-05: これ以外は受け付けない)
 HOTKEY_MODIFIERS = ("Ctrl", "Alt", "Shift")
 HOTKEY_KEYS = tuple(f"F{n}" for n in range(1, 13))
@@ -207,6 +217,7 @@ class Config(_Section):
     server: ServerConfig = ServerConfig()
     audio: AudioConfig = AudioConfig()
     silence: SilenceConfig = SilenceConfig()
+    tension: TensionConfig = TensionConfig()
     hotkeys: HotkeysConfig = HotkeysConfig()
     keywords: KeywordsConfig = KeywordsConfig()
     display: DisplayConfig = DisplayConfig()

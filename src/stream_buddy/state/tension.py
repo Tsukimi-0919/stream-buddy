@@ -35,9 +35,23 @@ class _Bonus:
 class Tension:
     """話している割合とイベントの補正から、Calm / Normal / High を決める。"""
 
-    def __init__(self, start_ms: int) -> None:
+    def __init__(
+        self,
+        start_ms: int,
+        *,
+        window_ms: int = c.TENSION_WINDOW_MS,
+        hold_ms: int = c.TENSION_HOLD_MS,
+    ) -> None:
+        """window_ms は話していた割合を数える窓、hold_ms は変わったあと変えない時間。
+
+        どちらも設定の [tension] から渡す (既定値は constants の値)。
+        """
+        if window_ms <= 0 or hold_ms < 0:
+            raise ValueError("window_ms は正、hold_ms は 0 以上にしてください")
+        self._window_ms = window_ms
+        self._hold_ms = hold_ms
         self.level: TensionLevel = "calm"
-        # 起動直後も TENSION_HOLD_MS は変えない
+        # 起動直後も hold_ms は変えない
         self._last_change_ms = start_ms
         # 話していた区間 (開始, 終了)。終了が None なら話している最中
         self._spans: list[tuple[int, int | None]] = []
@@ -72,15 +86,13 @@ class Tension:
 
         状態は変えない (窓の外のものは 0 として数えるだけで、捨てない)。
         """
-        window_start = now_ms - c.TENSION_WINDOW_MS
+        window_start = now_ms - self._window_ms
         spoken = 0
-        for start, end in self._spans:
-            # 話している最中は「今」までを数える
-            end_ms = now_ms if end is None else end
-            spoken += max(0, end_ms - max(start, window_start))
+        for start, end in self._spoken_intervals(now_ms):
+            spoken += max(0, end - max(start, window_start))
         bonus = sum(b.value_at(now_ms) for b in self._bonuses)
         # 割り算は 1 回だけにし、しきい値ちょうどで誤差が出ないようにする
-        return spoken * 100 / c.TENSION_WINDOW_MS, bonus
+        return spoken * 100 / self._window_ms, bonus
 
     @property
     def last_change_ms(self) -> int:
@@ -91,9 +103,30 @@ class Tension:
     def _speaking(self) -> bool:
         return bool(self._spans) and self._spans[-1][1] is None
 
+    def _spoken_intervals(self, now_ms: int) -> list[tuple[int, int]]:
+        """話していたとみなす区間 (開始, 終了)。話している最中は「今」までとする。
+
+        話し終わりから次の話し始めまでが TENSION_GAP_BRIDGE_MS 未満なら、その間も話していた
+        とみなしてつなぐ (息継ぎや文の切れ目を黙っていたと数えないため)。
+        話し終わって間もなく、次の話し始めを待っている間も、話していたとみなす。
+        その時間をすぎても話し始めなければ、間はまとめて黙っていたと数える。
+        状態は変えない (時刻と、話していた区間だけで決まる)。
+        """
+        merged: list[tuple[int, int]] = []
+        for start, end in self._spans:
+            end_ms = now_ms if end is None else end
+            if merged and start - merged[-1][1] < c.TENSION_GAP_BRIDGE_MS:
+                merged[-1] = (merged[-1][0], end_ms)
+            else:
+                merged.append((start, end_ms))
+        if merged and not self._speaking and now_ms - merged[-1][1] < c.TENSION_GAP_BRIDGE_MS:
+            merged[-1] = (merged[-1][0], now_ms)
+        return merged
+
     def _forget(self, now_ms: int) -> None:
-        window_start = now_ms - c.TENSION_WINDOW_MS
-        self._spans = [s for s in self._spans if s[1] is None or s[1] > window_start]
+        # 窓の始まりより前に終わった区間でも、窓の中の間をつなぐのに使うものは残す
+        keep_after = now_ms - self._window_ms - c.TENSION_GAP_BRIDGE_MS
+        self._spans = [s for s in self._spans if s[1] is None or s[1] > keep_after]
         self._bonuses = [b for b in self._bonuses if now_ms - b.start_ms < c.BONUS_DECAY_MS]
 
     def _judge(self, now_ms: int) -> list[Output]:
@@ -103,7 +136,7 @@ class Tension:
         return outputs
 
     def _change_level(self, now_ms: int) -> list[Output]:
-        if now_ms - self._last_change_ms < c.TENSION_HOLD_MS:
+        if now_ms - self._last_change_ms < self._hold_ms:
             return []
         value = self.score(now_ms)
         match self.level:

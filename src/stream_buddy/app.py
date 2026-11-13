@@ -19,7 +19,7 @@ from typing import assert_never
 
 from stream_buddy import demo as demo_mode
 from stream_buddy.audio import BLOCK_SECONDS, BlockQueue, Microphone
-from stream_buddy.config import Config
+from stream_buddy.config import Config, TensionConfig
 from stream_buddy.detect import SpeechDetector
 from stream_buddy.keywords import KeywordListener, KeywordSetup
 from stream_buddy.lines import LineBook, LinePicker
@@ -95,6 +95,14 @@ def format_debug(snapshot: Snapshot) -> str:
     )
 
 
+def format_tension_settings(tension: TensionConfig) -> str:
+    """--debug のとき起動時に 1 回出す、テンションの窓と待ちの秒数の行。"""
+    return (
+        f"[debug] テンション：窓 {tension.window_seconds} 秒、"
+        f"変化のあと {tension.hold_seconds} 秒は変えない"
+    )
+
+
 class Engine:
     """入力のキューと Brain、出力からページへのメッセージへの変換を受け持つ。"""
 
@@ -114,12 +122,13 @@ class Engine:
         log を渡すと、TensionPeak と Effect を配信ログに書く。
         """
         self._silence_seconds = config.silence.seconds
+        self._tension = config.tension
         self._clock = clock
         self._picker = LinePicker(book, rng if rng is not None else random.Random())  # noqa: S311  セリフ選び (暗号用途ではない)
         self._max_queue = max_queue
         self._debug = debug
         self._log = log
-        self.brain = Brain(start_ms=clock(), silence_seconds=self._silence_seconds)
+        self.brain = self._new_brain(clock())
         self._debug_last_ms = clock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue[QueueItem] | None = None
@@ -131,8 +140,16 @@ class Engine:
         """ループの中で入力を受け付け始める。Brain の時刻はここから数える。"""
         self._loop = loop
         self._queue = asyncio.Queue(maxsize=self._max_queue)
-        self.brain = Brain(start_ms=self._clock(), silence_seconds=self._silence_seconds)
+        self.brain = self._new_brain(self._clock())
         self._debug_last_ms = self._clock()
+
+    def _new_brain(self, start_ms: int) -> Brain:
+        return Brain(
+            start_ms=start_ms,
+            silence_seconds=self._silence_seconds,
+            tension_window_ms=self._tension.window_seconds * 1000,
+            tension_hold_ms=self._tension.hold_seconds * 1000,
+        )
 
     def unbind(self) -> None:
         self._loop = None

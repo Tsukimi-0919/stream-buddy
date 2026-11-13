@@ -38,9 +38,20 @@ class Snapshot:
 class Brain:
     """入力を各状態機械に配り、出力を出口に通して返す。"""
 
-    def __init__(self, start_ms: int, silence_seconds: int) -> None:
-        """silence_seconds は設定の silence.seconds (沈黙ハンターの最初の待ち時間)。"""
-        self.tension = Tension(start_ms)
+    def __init__(
+        self,
+        start_ms: int,
+        silence_seconds: int,
+        *,
+        tension_window_ms: int = c.TENSION_WINDOW_MS,
+        tension_hold_ms: int = c.TENSION_HOLD_MS,
+    ) -> None:
+        """silence_seconds は設定の silence.seconds (沈黙ハンターの最初の待ち時間)。
+
+        tension_window_ms と tension_hold_ms は設定の [tension] (テンションの窓と、変化のあと
+        変えない時間) をミリ秒にしたもの。
+        """
+        self.tension = Tension(start_ms, window_ms=tension_window_ms, hold_ms=tension_hold_ms)
         self.silence = SilenceHunter(start_ms, silence_seconds)
         self.event = EventMachine()
         self.arbiter = Arbiter()
