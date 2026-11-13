@@ -90,7 +90,7 @@ def test_starts_without_change_for_hold_after_start() -> None:
     assert run.changes == [(3_000, "normal")]
 
 
-@pytest.mark.parametrize("window_ms", [5_000, 15_000, 30_000, 60_000])
+@pytest.mark.parametrize("window_ms", [5_000, 15_000, 30_000])
 def test_score_stays_within_0_to_100_for_any_window(window_ms: int) -> None:
     run = Run(window_ms=window_ms, hold_ms=1_000)
     run.at(0, SpeechStarted())

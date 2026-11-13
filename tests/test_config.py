@@ -9,6 +9,7 @@ from stream_buddy.config import (
     UTF8_BOM,
     Config,
     ConfigError,
+    TensionConfig,
     _format_errors,
     load_config,
 )
@@ -296,7 +297,7 @@ def test_config_without_tension_section_uses_defaults(tmp_path: Path) -> None:
     assert (config.tension.window_seconds, config.tension.hold_seconds) == (15, 3)
 
 
-@pytest.mark.parametrize(("window", "hold"), [(5, 1), (60, 10), (30, 5)])
+@pytest.mark.parametrize(("window", "hold"), [(5, 1), (30, 10), (15, 3)])
 def test_tension_range_edges(tmp_path: Path, window: int, hold: int) -> None:
     text = f"[tension]\nwindow_seconds = {window}\nhold_seconds = {hold}\n"
     config = load_config(write_config(tmp_path, text))
@@ -306,8 +307,8 @@ def test_tension_range_edges(tmp_path: Path, window: int, hold: int) -> None:
 @pytest.mark.parametrize(
     ("text", "key", "low", "high"),
     [
-        ("window_seconds = 4", "window_seconds", 5, 60),
-        ("window_seconds = 61", "window_seconds", 5, 60),
+        ("window_seconds = 4", "window_seconds", 5, 30),
+        ("window_seconds = 31", "window_seconds", 5, 30),
         ("hold_seconds = 0", "hold_seconds", 1, 10),
         ("hold_seconds = 11", "hold_seconds", 1, 10),
     ],
@@ -321,3 +322,15 @@ def test_tension_out_of_range(tmp_path: Path, text: str, key: str, low: int, hig
 def test_tension_wrong_type_and_unknown_key(tmp_path: Path) -> None:
     assert "[tension] window_seconds" in load_error(tmp_path, "[tension]\nwindow_seconds = 15.5\n")
     assert "[tension] window は知らない項目です" in load_error(tmp_path, "[tension]\nwindow = 15\n")
+
+
+def test_tension_ranges_in_example_match_config() -> None:
+    # config.example.toml の説明の範囲が、config.py の範囲とそろっている
+    example = EXAMPLE.read_text(encoding="utf-8")
+    assert "window_seconds = 15          # 5〜30。" in example
+    assert "hold_seconds = 3             # 1〜10。" in example
+    for value in (5, 30):
+        assert TensionConfig(window_seconds=value).window_seconds == value
+    for value in (4, 31):
+        with pytest.raises(ValidationError):
+            TensionConfig(window_seconds=value)

@@ -537,10 +537,10 @@ def test_demo_flow_sends_calm_normal_and_high() -> None:
     assert levels[-1] == "calm"  # 次の繰り返しも Calm から始まる
 
 
-@pytest.mark.parametrize(("window", "hold"), [(15, 3), (5, 1), (30, 5)])
+@pytest.mark.parametrize(("window", "hold"), [(15, 3), (5, 1), (30, 5), (30, 10)])
 def test_demo_flow_with_tension_settings(window: int, hold: int) -> None:
-    # 既定 (窓 15 秒・待ち 3 秒)、短い端、v1.1.0 までの値で、デモで High・演出・セリフが出る。
-    # 窓を長くする (40 秒以上など) と、デモで話す約 28 秒では High に届かない
+    # 既定 (窓 15 秒・待ち 3 秒)、範囲の両端、v1.1.0 までの値で、デモで High・演出・セリフが出る。
+    # 窓の上限を 30 秒にしたのは、それより長いとデモで話す約 28 秒では High に届かないため
     sim = Sim(silence_seconds=20, tension=TensionConfig(window_seconds=window, hold_seconds=hold))
     for at, event in demo.demo_script(20):
         sim.at(at, event)
@@ -577,8 +577,8 @@ def test_format_tension_settings() -> None:
     assert app.format_tension_settings(TensionConfig()) == (
         "[debug] テンション：窓 15 秒、変化のあと 3 秒は変えない"
     )
-    line = app.format_tension_settings(TensionConfig(window_seconds=60, hold_seconds=10))
-    assert line == "[debug] テンション：窓 60 秒、変化のあと 10 秒は変えない"
+    line = app.format_tension_settings(TensionConfig(window_seconds=30, hold_seconds=10))
+    assert line == "[debug] テンション：窓 30 秒、変化のあと 10 秒は変えない"
     assert SETTINGS.fullmatch(line)
 
 
