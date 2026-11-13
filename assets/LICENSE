@@ -1,9 +1,10 @@
 素材のライセンス (Asset License)
 
 対象 (Applies to):
-  src/stream_buddy/overlay/static/img/ にある画像
-  (images in src/stream_buddy/overlay/static/img/)
+  src/stream_buddy/overlay/static/img/ と assets/icon/ にある画像
+  (images in src/stream_buddy/overlay/static/img/ and assets/icon/)
   - mendako-body.png (メンダコの体 / Mendako body)
+  - stream-buddy.ico、stream-buddy-256.png (アプリのアイコン。mendako-body.png から作成 / application icon, made from mendako-body.png)
 
 ライセンス (License):
   Creative Commons Attribution 4.0 International (CC BY 4.0)
