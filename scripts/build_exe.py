@@ -37,6 +37,8 @@ ENTRY_SCRIPT = PACKAGE_DIR / "__main__.py"
 OVERLAY_DIR = PACKAGE_DIR / "overlay"
 DATA_DIR = PACKAGE_DIR / "data"
 CONFIG_EXAMPLE = ROOT / "config.example.toml"
+# exe のアイコン。scripts/make_icon.py で作り、コミットしてある (T-20)
+ICON_FILE = ROOT / "assets" / "icon" / "stream-buddy.ico"
 DIST_ROOT = ROOT / "dist"
 BUILD_ROOT = ROOT / "build"
 # ビルドの情報 (コミット・変更の有無・日付)。コミットに混ざらないよう src/ ではなく build/ に書き、
@@ -164,6 +166,13 @@ def portaudio_dll() -> Path:
     return dll
 
 
+def icon_file() -> Path:
+    """exe のアイコン。ないときはビルドしない。"""
+    if not ICON_FILE.is_file():
+        raise BuildError(f"アイコンが見つかりません: {ICON_FILE} (scripts/make_icon.py で作れます)")
+    return ICON_FILE
+
+
 def pyinstaller_args(mode: str) -> list[str]:
     dist = output_dir(mode)
     work = work_dir(mode)
@@ -177,6 +186,8 @@ def pyinstaller_args(mode: str) -> list[str]:
         "--console",  # OBS の URL を表示するため、コンソールを出す
         "--noupx",  # UPX の圧縮は Defender の誤検知が増えやすいため使わない
         "--noconfirm",
+        "--icon",
+        str(icon_file()),
         "--clean",
         "--distpath",
         str(distpath),
