@@ -1,6 +1,6 @@
 [project]
 name = "stream-buddy"
-version = "1.0.0"
+version = "1.1.0"
 description = "1人配信の相棒「メンダコ」を OBS のブラウザソースに表示するツール"
 requires-python = ">=3.12,<3.13"
 dependencies = [

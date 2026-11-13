@@ -117,3 +117,32 @@ def test_folder_diagram_matches_bundled_hash_list() -> None:
     model_at = next(i for i, line in enumerate(lines) if "vosk-model-small-ja-0.22\\" in line)
     shown = {line.split("─ ")[1] for line in lines[model_at + 1 :] if "─ " in line}
     assert shown == top
+
+
+# T-22：v1.1.0 のリリース準備
+
+
+def test_top_notice_says_current_version() -> None:
+    from stream_buddy import __version__
+
+    assert __version__ == "1.1.0"
+    notice = readme().split("\n## ", 1)[0]
+    assert f"**v{__version__} を公開しています。**" in notice
+
+
+def test_known_limitations_mention_taskbar_icon() -> None:
+    limits = section(readme(), "## 既知の制限")
+    assert "タスクバー" in limits
+    assert "コンソール" in limits
+
+
+def test_troubleshooting_explains_stale_icon_cache() -> None:
+    trouble = section(readme(), "## 困ったとき")
+    assert "アイコンが古いまま" in trouble
+    assert any("ie4uinit.exe -show" in b for b in powershell_blocks(trouble))
+
+
+def test_update_section_says_config_is_compatible_with_1_0_0() -> None:
+    update = section(readme(), "## 更新するとき")
+    assert "v1.0.0 から v1.1.0" in update
+    assert "そのまま使えます" in update
