@@ -125,7 +125,7 @@ def test_folder_diagram_matches_bundled_hash_list() -> None:
 def test_top_notice_says_current_version() -> None:
     from stream_buddy import __version__
 
-    assert __version__ == "1.1.0"
+    assert __version__ == "1.2.0"
     notice = readme().split("\n## ", 1)[0]
     assert f"**v{__version__} を公開しています。**" in notice
 
@@ -161,3 +161,24 @@ def test_tension_settings_example_matches_defaults() -> None:
     example = tomllib.loads(blocks[0])["tension"]
     assert example == Config().tension.model_dump()
     assert "window_seconds = 30" in readme()  # v1.1.0 までの動きに戻す方法
+
+
+# T-24：v1.2.0 のリリース準備
+
+
+def test_requirements_section_shows_measured_footprint() -> None:
+    env = section(readme(), "## 動作環境")
+    assert "CPU 約 0.4%" in env
+    assert "メモリ約 220 MB" in env
+    assert "音声認識モデルの読み込みを含む" in env
+
+
+def test_update_section_explains_upgrade_from_1_1_0() -> None:
+    update = section(readme(), "## 更新するとき")
+    assert "v1.1.0 から v1.2.0" in update
+    after = update.split("v1.1.0 から v1.2.0", 1)[1]
+    assert "そのまま使えます" in after
+    assert "15 秒" in after
+    assert "3 秒" in after
+    assert "window_seconds = 30" in after
+    assert "hold_seconds = 5" in after
